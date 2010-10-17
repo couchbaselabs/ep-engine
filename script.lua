@@ -1,0 +1,1 @@
+io.write(string.format("Got key %q in vbucket %d\n", key, vb))

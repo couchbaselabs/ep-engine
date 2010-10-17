@@ -441,6 +441,7 @@ ${PYTHON_TOOLS}: wrapper/wrapper
 	cp $< $@
 
 if HAVE_LIBLUA
+ep_la_LIBADD += $(LTLIBLUA)
 bin_PROGRAMS += management/cbkvtool
 
 management_cbkvtool_SOURCES = atomic.cc mutex.cc management/kvtool.cc \

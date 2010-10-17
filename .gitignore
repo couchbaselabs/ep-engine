@@ -38,6 +38,8 @@
 /configure
 /docs/doxy
 /dtrace/probes.h
+/embedded/lua-5.1.4/src/lua
+/embedded/lua-5.1.4/src/luac
 /gen_config
 /generated_configuration.*
 /generated_suite_*.c
