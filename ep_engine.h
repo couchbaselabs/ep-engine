@@ -10,6 +10,7 @@
 #include "dispatcher.hh"
 #include "item_pager.hh"
 #include "observe_registry.hh"
+#include "scripting.hh"
 
 #include <cstdio>
 #include <map>
@@ -769,6 +770,7 @@ private:
     Atomic<uint64_t> mutation_count;
     size_t getlDefaultTimeout;
     size_t getlMaxTimeout;
+    ScriptContext scriptCtx;
     EPStats stats;
     ObserveRegistry observeRegistry;
     Configuration configuration;

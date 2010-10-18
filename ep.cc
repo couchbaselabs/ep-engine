@@ -36,12 +36,6 @@
 #include "invalid_vbtable_remover.hh"
 
 extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-}
-
-extern "C" {
     static rel_time_t uninitialized_current_time(void) {
         abort();
         return 0;
@@ -2467,39 +2461,12 @@ int EventuallyPersistentStore::flushOneDelOrSet(const queued_item &qi,
     return ret;
 }
 
-static void runLua(const queued_item &qi) {
-    int status;
-    lua_State *L;
-
-    L = luaL_newstate();
-
-    luaL_openlibs(L);
-
-    lua_pushliteral(L, "key");
-    lua_pushstring(L, qi->getKey().c_str());
-    lua_settable(L, LUA_GLOBALSINDEX);
-
-    lua_pushliteral(L, "vb");
-    lua_pushinteger(L, qi->getVBucketId());
-    lua_settable(L, LUA_GLOBALSINDEX);
-
-    status = luaL_dofile(L, "script.lua");
-    std::cout << "Lua status:  " << status << std::endl;
-    if (status) {
-        fprintf(stderr, "Couldn't load file: %s\n", lua_tostring(L, -1));
-        exit(1);
-    }
-    lua_close(L);
-}
-
 int EventuallyPersistentStore::flushOne(std::queue<queued_item> *q,
                                         std::queue<queued_item> *rejectQueue) {
     queued_item qi = q->front();
     q->pop();
     stats.memOverhead.decr(sizeof(queued_item));
     assert(stats.memOverhead.get() < GIGANTOR);
-
-    runLua(qi);
 
     int rv = 0;
     switch (qi->getOperation()) {

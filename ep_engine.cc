@@ -1238,6 +1238,8 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::initialize(const char* config) {
     if (ret == ENGINE_SUCCESS) {
         getlExtension = new GetlExtension(epstore, getServerApiFunc);
         getlExtension->initialize();
+
+        scriptCtx.initialize(epstore, getServerApiFunc);
     }
 
     getLogger()->log(EXTENSION_LOG_DEBUG, NULL, "Engine init complete.\n");

@@ -1,0 +1,92 @@
+/* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2010 NorthScale, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
+#include "config.h"
+#include <string>
+
+#include "ep.hh"
+#include <memcached/extension.h>
+
+extern "C" {
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+}
+
+extern "C" {
+    typedef ENGINE_ERROR_CODE (*RESPONSE_HANDLER_T)(const void *, int , const char *);
+
+    extern const char serverApiKey;
+
+    // Register an ascii protocol handler.
+    int register_extension(lua_State *luaState);
+}
+
+class ScriptAsciiExtension : public EXTENSION_ASCII_PROTOCOL_DESCRIPTOR {
+public:
+
+    ScriptAsciiExtension(lua_State *st, const char *n);
+
+    const char* getName() { return name; }
+
+    ENGINE_ERROR_CODE doExecute(const void *c,
+                                int argc, token_t *argv,
+                                RESPONSE_HANDLER_T response_handler);
+
+    bool doAccept(void *c, int argc, token_t *argv, size_t *ndata,
+                  char **ptr);
+
+    void doAbort(const void *c);
+
+private:
+
+    lua_State *state;
+    const char *name;
+    DISALLOW_COPY_AND_ASSIGN(ScriptAsciiExtension);
+};
+
+class ScriptContext {
+public:
+
+    ScriptContext() : luaState(luaL_newstate()) {
+        luaL_openlibs(luaState);
+        int status = luaL_dofile(luaState, "script.lua");
+        if (status) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "Couldn't load file: %s\n",
+                     lua_tostring(luaState, -1));
+            std::string s(buf);
+            throw s;
+        }
+
+    }
+
+    ~ScriptContext() {
+        lua_close(luaState);
+    }
+
+    void initialize(EventuallyPersistentStore *s,
+                    GET_SERVER_API get_server_api);
+
+private:
+
+    lua_State* luaState;
+    EventuallyPersistentStore *store;
+    SERVER_HANDLE_V1 *serverApi;
+
+    DISALLOW_COPY_AND_ASSIGN(ScriptContext);
+};

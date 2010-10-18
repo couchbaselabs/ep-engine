@@ -88,6 +88,7 @@ ep_la_SOURCES = \
                  restore.hh \
                  restore_impl.cc \
                  ringbuffer.hh \
+                 scripting.hh scripting.cc \
                  sizes.cc \
                  stats.hh \
                  statsnap.cc statsnap.hh \
