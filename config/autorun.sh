@@ -6,6 +6,7 @@ ACLOCAL_FLAGS="-I m4"
 AUTOHEADER_FLAGS="--warnings=error"
 AUTOCONF_CLAGS="--warnings=error --force"
 
+topdir=`pwd`
 
 ARGV0=$0
 ARGS="$@"
@@ -42,6 +43,15 @@ if [ -d .git ]
 then
   perl config/version.pl || die "Failed to run config/version.pl"
 fi
+
+# Leveldb Integration.  This builds a make include from leveldb's build script
+sh embedded/leveldb/build_detect_platform
+sed -e 's/^/# /' < build_config.mk > leveldb_build_config.mk
+echo " " >> leveldb_build_config.mk
+sed -n -e 's/PORT_CFLAGS=/libleveldb_la_CXXFLAGS+=/p' \
+    -e 's/PLATFORM_CFLAGS=/libleveldb_la_CXXFLAGS+=/p' \
+    < build_config.mk >> leveldb_build_config.mk
+rm build_config.mk
 
 # Try to detect the supported binaries if the user didn't
 # override that by pushing the environment variable

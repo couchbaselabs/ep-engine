@@ -2794,8 +2794,8 @@ void LoadStorageKVPairCallback::callback(GetValue &val) {
             epstore->getInvalidItemDbPager()->addInvalidItem(i, val.getVBucketVersion());
 
             getLogger()->log(EXTENSION_LOG_WARNING, NULL,
-                             "Received invalid item (v %d != v %d).. ignored",
-                             val.getVBucketVersion(), vb_version);
+                             "Received invalid item (expected vbid=%d, got %d).. ignored",
+                             vb_version, val.getVBucketVersion());
 
             delete i;
             return;

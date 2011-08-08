@@ -8,9 +8,10 @@
 #include "ep_engine.h"
 #include "stats.hh"
 #include "kvstore.hh"
-#include "sqlite-kvstore.hh"
+#include "sqlite-kvstore/sqlite-kvstore.hh"
 #include "mc-kvstore/mc-kvstore.hh"
 #include "blackhole-kvstore/blackhole.hh"
+#include "leveldb-kvstore/leveldb-kvstore.hh"
 
 KVStore *KVStoreFactory::create(EventuallyPersistentEngine &theEngine) {
     Configuration &c = theEngine.getConfiguration();
@@ -22,6 +23,8 @@ KVStore *KVStoreFactory::create(EventuallyPersistentEngine &theEngine) {
         return new MCKVStore(theEngine);
     } else if (backend.compare("blackhole") == 0) {
         return new BlackholeKVStore(theEngine);
+    } else if (backend.compare("leveldb") == 0) {
+        return new LevelDBKVStore(theEngine);
     } else {
         getLogger()->log(EXTENSION_LOG_WARNING, NULL, "Unknown backend: [%s]",
                 backend.c_str());

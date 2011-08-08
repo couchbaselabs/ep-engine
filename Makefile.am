@@ -24,6 +24,7 @@ noinst_LTLIBRARIES = \
                      libblackhole-kvstore.la \
                      libconfiguration.la \
                      libkvstore.la \
+                     libleveldb-kvstore.la \
                      libmc-kvstore.la \
                      libobjectregistry.la \
                      libsqlite-kvstore.la
@@ -50,7 +51,7 @@ cbadm-online-update.1m: docs/cbadm-online-update.pod
 cbbackup-incremental.1m: docs/cbbackup-incremental.pod
 	${POD2MAN} -c "$*" -r "" -s 1m $< $@
 
-ep_la_CPPFLAGS = -I$(top_srcdir) $(AM_CPPFLAGS)
+ep_la_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/embedded/leveldb/include $(AM_CPPFLAGS)
 ep_la_LDFLAGS = -module -dynamic
 ep_la_SOURCES = \
                  atomic/gcc_atomics.h \
@@ -102,11 +103,12 @@ ep_la_SOURCES = \
                  vbucketmap.cc vbucketmap.hh
 
 
-
 libobjectregistry_la_SOURCES = objectregistry.cc objectregistry.hh
 
 libkvstore_la_SOURCES = kvstore.cc kvstore.hh
 libkvstore_la_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/sqlite-kvstore \
+                         -I$(top_srcdir)/leveldb-kvstore \
+                         -I$(top_srcdir)/embedded/leveldb/include \
                          $(AM_CPPFLAGS)
 
 libsqlite_kvstore_la_SOURCES = kvstore.hh \
@@ -123,7 +125,7 @@ libsqlite_kvstore_la_SOURCES = kvstore.hh \
                                sqlite-kvstore/sqlite-strategies.hh \
                                sqlite-kvstore/sqlite-vfs.c
 libsqlite_kvstore_la_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/sqlite-kvstore \
-                                $(AM_CPPFLAGS)
+                                -I$(top_srcdir)/embedded/leveldb/include $(AM_CPPFLAGS)
 libsqlite_kvstore_la_LIBADD =
 libsqlite_kvstore_la_DEPENDENCIES =
 
@@ -143,6 +145,16 @@ libmc_kvstore_la_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/sqlite-kvstore \
 libmc_kvstore_la_LIBADD =
 libmc_kvstore_la_DEPENDENCIES =
 
+libleveldb_kvstore_la_SOURCES = kvstore.hh \
+                                leveldb-kvstore/leveldb-kvstore.cc \
+                                leveldb-kvstore/leveldb-kvstore.hh
+libleveldb_kvstore_la_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/embedded/leveldb/include \
+                                 -I$(top_srcdir)/leveldb-kvstore \
+                                 $(AM_CPPFLAGS)
+libleveldb_kvstore_la_LIBADD =
+libleveldb_kvstore_la_DEPENDENCIES =
+
+
 .generated_configuration: gen_config configuration.json
 	./gen_config && touch .generated_configuration
 
@@ -153,30 +165,96 @@ libconfiguration_la_SOURCES = \
                               configuration.hh \
                               configuration.cc
 
-ep_la_LIBADD = libkvstore.la libsqlite-kvstore.la libmc-kvstore.la \
+ep_la_LIBADD = libkvstore.la libsqlite-kvstore.la libmc-kvstore.la libleveldb-kvstore.la \
                libblackhole-kvstore.la \
                libobjectregistry.la libconfiguration.la $(LTLIBEVENT)
-ep_la_DEPENDENCIES = libkvstore.la libsqlite-kvstore.la	\
+ep_la_DEPENDENCIES = libkvstore.la libsqlite-kvstore.la libleveldb-kvstore.la \
                libmc-kvstore.la libblackhole-kvstore.la	\
                libobjectregistry.la libconfiguration.la
-ep_testsuite_la_LIBADD = libkvstore.la libsqlite-kvstore.la		\
+ep_testsuite_la_LIBADD = libkvstore.la libsqlite-kvstore.la	libleveldb-kvstore.la \
                          libmc-kvstore.la libblackhole-kvstore.la	\
                          libobjectregistry.la libconfiguration.la	\
                          $(LTLIBEVENT)
 ep_testsuite_la_DEPENDENCIES = libkvstore.la libsqlite-kvstore.la	\
+                               libleveldb-kvstore.la \
                                libmc-kvstore.la				\
                                libblackhole-kvstore.la			\
                                libobjectregistry.la
-
 management_cbdbconvert_SOURCES = atomic.cc mutex.cc management/dbconvert.cc \
                                  testlogger.cc
-management_cbdbconvert_LDADD = libkvstore.la libsqlite-kvstore.la	\
-                               libmc-kvstore.la				\
-                               libblackhole-kvstore.la			\
-                               libobjectregistry.la			\
+management_cbdbconvert_LDADD = libkvstore.la libsqlite-kvstore.la       \
+                               libmc-kvstore.la                         \
+                               libleveldb-kvstore.la                    \
+                               libblackhole-kvstore.la                  \
+                               libobjectregistry.la                     \
                                libconfiguration.la $(LTLIBEVENT)
 management_cbdbconvert_DEPENDENCIES = libkvstore.la libsqlite-kvstore.la libmc-kvstore.la \
-                                      libobjectregistry.la libconfiguration.la
+                                      libobjectregistry.la libconfiguration.la \
+                                      libleveldb-kvstore.la
+
+###########################################################################
+# LevelDB Build
+###########################################################################
+
+libleveldb_la_SOURCES = \
+	embedded/leveldb/db/builder.cc \
+	embedded/leveldb/db/c.cc \
+	embedded/leveldb/db/db_impl.cc \
+	embedded/leveldb/db/db_iter.cc \
+	embedded/leveldb/db/filename.cc \
+	embedded/leveldb/db/dbformat.cc \
+	embedded/leveldb/db/log_reader.cc \
+	embedded/leveldb/db/log_writer.cc \
+	embedded/leveldb/db/memtable.cc \
+	embedded/leveldb/db/repair.cc \
+	embedded/leveldb/db/table_cache.cc \
+	embedded/leveldb/db/version_edit.cc \
+	embedded/leveldb/db/version_set.cc \
+	embedded/leveldb/db/write_batch.cc \
+	embedded/leveldb/port/port_posix.cc \
+	embedded/leveldb/table/block.cc \
+	embedded/leveldb/table/block_builder.cc \
+	embedded/leveldb/table/format.cc \
+	embedded/leveldb/table/iterator.cc \
+	embedded/leveldb/table/merger.cc \
+	embedded/leveldb/table/table.cc \
+	embedded/leveldb/table/table_builder.cc \
+	embedded/leveldb/table/two_level_iterator.cc \
+	embedded/leveldb/util/arena.cc \
+	embedded/leveldb/util/cache.cc \
+	embedded/leveldb/util/coding.cc \
+	embedded/leveldb/util/comparator.cc \
+	embedded/leveldb/util/crc32c.cc \
+	embedded/leveldb/util/env.cc \
+	embedded/leveldb/util/env_posix.cc \
+	embedded/leveldb/util/hash.cc \
+	embedded/leveldb/util/histogram.cc \
+	embedded/leveldb/util/logging.cc \
+	embedded/leveldb/util/options.cc \
+	embedded/leveldb/util/status.cc
+
+libleveldb_la_CXXFLAGS = -I$(top_srcdir) -I$(top_srcdir)/embedded/leveldb/include \
+                         -I$(top_srcdir)/embedded/leveldb $(AM_CPPFLAGS) ${NO_WERROR}
+
+include leveldb_build_config.mk
+
+###########################################################################
+# End of LevelDB Build
+###########################################################################
+
+ep_la_LIBADD += libleveldb.la
+ep_la_DEPENDENCIES += libleveldb.la
+ep_testsuite_la_LIBADD += libleveldb.la
+ep_testsuite_la_DEPENDENCIES += libleveldb.la
+management_cbdbconvert_LDADD += libleveldb.la
+management_cbdbconvert_DEPENDENCIES += libleveldb.la
+noinst_LTLIBRARIES += libleveldb.la
+
+.libs/libleveldb.a: embedded/leveldb/libleveldb.a
+	cp embedded/leveldb/libleveldb.a $@
+
+embedded/leveldb/libleveldb.a:
+	(cd embedded/leveldb && make)
 
 if BUILD_EMBEDDED_LIBSQLITE3
 ep_la_LIBADD += libsqlite3.la
