@@ -141,9 +141,36 @@ extern "C" {
         return 1;
     }
 
+    static int mc_del(lua_State *ls) {
+        if (lua_gettop(ls) != 2) {
+            lua_pushstring(ls, "mc.del takes two arguments: vbucket, key");
+            lua_error(ls);
+            return 1;
+        }
+
+        int vb = lua_tointeger(ls, 1);
+        const char *key = lua_tostring(ls, 2);
+
+        lua_pushlightuserdata(ls, (void*)&storeKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        EventuallyPersistentStore *store =
+            static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
+
+        if (store->deleteItem(key, 0, 0, vb,
+                              NULL, false, false) != ENGINE_SUCCESS) {
+            lua_pushstring(ls, "error deleting");
+            lua_error(ls);
+            return 1;
+        }
+        return 0;
+    }
+
     static const luaL_Reg mc_funcs[] = {
         {"get", mc_get},
         {"set", mc_set},
+        {"del", mc_del},
         {NULL, NULL}
     };
 }
