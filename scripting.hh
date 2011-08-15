@@ -30,8 +30,6 @@ extern "C" {
 extern "C" {
     typedef ENGINE_ERROR_CODE (*RESPONSE_HANDLER_T)(const void *, int , const char *);
 
-    extern const char serverApiKey;
-
     // Register an ascii protocol handler.
     int register_extension(lua_State *luaState);
 }

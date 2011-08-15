@@ -20,7 +20,8 @@
 extern "C" {
 
     // References to global data
-    const char serverApiKey = 'S';
+    static const char serverApiKey = 'S';
+    static const char storeKey =     'E';
 
     static ScriptAsciiExtension* script_ascii_cast(const void *cmd_cookie) {
         return static_cast<ScriptAsciiExtension*>(const_cast<void*>(cmd_cookie));
@@ -71,6 +72,43 @@ extern "C" {
         serverApi->extension->register_extension(EXTENSION_ASCII_PROTOCOL, ext);
         return 0;
     }
+
+    static int mc_get(lua_State *ls) {
+        if (lua_gettop(ls) != 2) {
+            lua_pushstring(ls, "mc.get takes two arguments: vbucket, key");
+            lua_error(ls);
+            return 1;
+        }
+
+        int vb = lua_tointeger(ls, 1);
+        const char *key = lua_tostring(ls, 2);
+
+        lua_pushlightuserdata(ls, (void*)&storeKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        EventuallyPersistentStore *store =
+            static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
+        GetValue gv(store->get(key, vb, NULL, false));
+
+        if (gv.getStatus() != ENGINE_SUCCESS) {
+            lua_pushstring(ls, "error retrieving stuff");
+            lua_error(ls);
+            return 1;
+        } else {
+            StoredValue *v = gv.getStoredValue();
+            lua_pushinteger(ls, ntohl(v->getFlags()));
+            lua_pushinteger(ls, v->getCas());
+            value_t val = v->getValue();
+            lua_pushlstring(ls, val->getData(), val->length());
+            return 3;
+        }
+    }
+
+    static const luaL_Reg mc_funcs[] = {
+        {"get", mc_get},
+        {NULL, NULL}
+    };
 }
 
 ScriptAsciiExtension::ScriptAsciiExtension(lua_State *st, const char *n)
@@ -135,8 +173,14 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
     store = s;
     serverApi = get_server_api();
 
+    luaL_register(luaState, "mc", mc_funcs);
+
     lua_pushlightuserdata(luaState, (void *)&serverApiKey);
     lua_pushlightuserdata(luaState, serverApi);
+    lua_settable(luaState, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(luaState, (void *)&storeKey);
+    lua_pushlightuserdata(luaState, store);
     lua_settable(luaState, LUA_REGISTRYINDEX);
 
     std::cerr << "Setting up script extensions" << std::endl;
