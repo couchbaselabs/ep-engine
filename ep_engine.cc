@@ -269,6 +269,7 @@ extern "C" {
                                                      size_t *msg_size) {
         (void)e;
 
+        LockHolder lh(e->scriptLock);
         protocol_binary_request_no_extras *req =
             (protocol_binary_request_no_extras*)request;
 

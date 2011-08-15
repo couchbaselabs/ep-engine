@@ -574,6 +574,7 @@ public:
         return warmingUp.get() || restore.enabled.get();
     }
 
+    Mutex scriptLock;
     ScriptContext scriptCtx;
 
 protected:
