@@ -106,9 +106,9 @@ extern "C" {
     }
 
     static int mc_set(lua_State *ls) {
-        if (lua_gettop(ls) != 5) {
-            lua_pushstring(ls, "mc.set takes five arguments: "
-                           "vbucket, key, exp, flags, and value");
+        if (lua_gettop(ls) < 5) {
+            lua_pushstring(ls, "mc.set takes five or six arguments: "
+                           "vbucket, key, exp, flags, value, [cas]");
             lua_error(ls);
             return 1;
         }
@@ -119,6 +119,7 @@ extern "C" {
         int flags = htonl(lua_tointeger(ls, 4));
         size_t val_len;
         const char *valptr = lua_tolstring(ls, 5, &val_len);
+        uint64_t cas(lua_gettop(ls) > 5 ? lua_tointeger(ls, 6) : 0);
 
         lua_pushlightuserdata(ls, (void*)&storeKey);
         lua_gettable(ls, LUA_REGISTRYINDEX);
@@ -127,7 +128,7 @@ extern "C" {
         EventuallyPersistentStore *store =
             static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
 
-        Item itm(key, strlen(key), flags, exptime, valptr, val_len, 0, -1, vb);
+        Item itm(key, strlen(key), flags, exptime, valptr, val_len, cas, -1, vb);
 
         if (store->set(itm, NULL) != ENGINE_SUCCESS) {
             lua_pushstring(ls, "storage error");
