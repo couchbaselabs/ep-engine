@@ -75,6 +75,8 @@ public:
 
     }
 
+    std::string eval(const char *script);
+
     ~ScriptContext() {
         lua_close(luaState);
     }

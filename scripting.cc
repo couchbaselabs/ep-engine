@@ -107,6 +107,30 @@ void ScriptAsciiExtension::doAbort(const void *c) {
     (void)c;
 }
 
+std::string ScriptContext::eval(const char *script) {
+    lua_settop(luaState, 0);
+
+    if (luaL_loadstring(luaState, script) != 0) {
+        std::cerr << "Error compiling this rubbish:\n" << script << std::endl;
+        return "Compilation error";
+    }
+
+    if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != 0) {
+        std::cerr << "Error running the script.\n";
+    }
+
+    std::string rv;
+    if (lua_gettop(luaState) >= 1 && lua_isstring(luaState, 1)) {
+        size_t slen;
+        const char *s = lua_tolstring(luaState, 1, &slen);
+        if (s) {
+            rv.assign(s, slen);
+        }
+    }
+
+    return rv;
+}
+
 void ScriptContext::initialize(EventuallyPersistentStore *s,
                                GET_SERVER_API get_server_api) {
     store = s;

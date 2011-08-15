@@ -129,6 +129,12 @@
  */
 #define CMD_RESET_REPLICATION_CHAIN 0x9f
 
+
+/**
+ * Run the given script.  Return the output.
+ */
+#define CMD_RUN_SCRIPT 0xbe
+
 /*
  * IDs for the events of the observe command.
  */

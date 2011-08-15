@@ -317,6 +317,10 @@ class MemcachedClient(object):
     def evict_key(self, key):
         return self._doCmd(memcacheConstants.CMD_EVICT_KEY, key, '')
 
+    def run_script(self, script):
+        """Run a lua script."""
+        return self._doCmd(memcacheConstants.CMD_RUN_SCRIPT, '', script)
+
     def getMulti(self, keys):
         """Get values for any available keys in the given iterable.
 

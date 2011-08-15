@@ -574,6 +574,8 @@ public:
         return warmingUp.get() || restore.enabled.get();
     }
 
+    ScriptContext scriptCtx;
+
 protected:
     friend class EpEngineValueChangeListener;
 
@@ -770,7 +772,6 @@ private:
     Atomic<uint64_t> mutation_count;
     size_t getlDefaultTimeout;
     size_t getlMaxTimeout;
-    ScriptContext scriptCtx;
     EPStats stats;
     ObserveRegistry observeRegistry;
     Configuration configuration;

@@ -73,6 +73,9 @@ CMD_SETQ_WITH_META = 0xa3
 CMD_ADD_WITH_META = 0xa4
 CMD_ADDQ_WITH_META = 0xa5
 
+# Run a lua script
+CMD_RUN_SCRIPT = 0xbe
+
 # Replication
 CMD_TAP_CONNECT = 0x40
 CMD_TAP_MUTATION = 0x41

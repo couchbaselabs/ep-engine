@@ -263,6 +263,46 @@ extern "C" {
         return rv;
     }
 
+    static protocol_binary_response_status runScript(EventuallyPersistentEngine *e,
+                                                     protocol_binary_request_header *request,
+                                                     char **msg,
+                                                     size_t *msg_size) {
+        (void)e;
+
+        protocol_binary_request_no_extras *req =
+            (protocol_binary_request_no_extras*)request;
+
+        char keyz[256];
+
+        // Read the key.
+        int keylen = ntohs(req->message.header.request.keylen);
+        if (keylen >= (int)sizeof(keyz)) {
+            *msg = strdup("Key is too large.");
+            return PROTOCOL_BINARY_RESPONSE_EINVAL;
+        }
+        memcpy(keyz, ((char*)request) + sizeof(req->message.header), keylen);
+        keyz[keylen] = 0x00;
+
+        // Read the value.
+        size_t bodylen = ntohl(req->message.header.request.bodylen)
+            - ntohs(req->message.header.request.keylen);
+        char *valz = static_cast<char*>(calloc(1, bodylen+1));
+        memcpy(valz, (char*)request + sizeof(req->message.header)
+               + keylen, bodylen);
+        valz[bodylen] = 0x00;
+
+        std::string s = e->scriptCtx.eval(valz);
+        if (s.size() > 0) {
+            *msg_size = s.size();
+            // This is freed by the remote side.
+            *msg = (char*)calloc(1, s.size());
+            assert(*msg);
+            memcpy(*msg, s.data(), s.size());
+        }
+
+        return PROTOCOL_BINARY_RESPONSE_SUCCESS;
+    }
+
     static protocol_binary_response_status setFlushParam(EventuallyPersistentEngine *e,
                                                          const char *keyz, const char *valz,
                                                          const char **msg,
@@ -768,6 +808,7 @@ extern "C" {
         protocol_binary_response_status res =
             PROTOCOL_BINARY_RESPONSE_UNKNOWN_COMMAND;
         const char *msg = NULL;
+        char *auto_msg = NULL;
         size_t msg_size = 0;
         Item *itm = NULL;
 
@@ -869,6 +910,9 @@ extern "C" {
                 return rv;
             }
             break;
+        case CMD_RUN_SCRIPT:
+            res = runScript(h, request, &auto_msg, &msg_size);
+            msg = auto_msg;
         }
 
         // Send a special response for getl since we don't want to send the key
@@ -903,6 +947,9 @@ extern "C" {
                     static_cast<uint16_t>(res), 0, cookie);
 
         }
+
+        free(auto_msg);
+
         return ENGINE_SUCCESS;
     }
 
