@@ -105,8 +105,44 @@ extern "C" {
         }
     }
 
+    static int mc_set(lua_State *ls) {
+        if (lua_gettop(ls) != 5) {
+            lua_pushstring(ls, "mc.set takes five arguments: "
+                           "vbucket, key, exp, flags, and value");
+            lua_error(ls);
+            return 1;
+        }
+
+        int vb = lua_tointeger(ls, 1);
+        const char *key = lua_tostring(ls, 2);
+        rel_time_t exptime = static_cast<rel_time_t>(lua_tointeger(ls, 3));
+        int flags = htonl(lua_tointeger(ls, 4));
+        size_t val_len;
+        const char *valptr = lua_tolstring(ls, 5, &val_len);
+
+        lua_pushlightuserdata(ls, (void*)&storeKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        EventuallyPersistentStore *store =
+            static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
+
+        Item itm(key, strlen(key), flags, exptime, valptr, val_len, 0, -1, vb);
+
+        if (store->set(itm, NULL) != ENGINE_SUCCESS) {
+            lua_pushstring(ls, "storage error");
+            lua_error(ls);
+            return 1;
+        }
+
+        lua_pushinteger(ls, itm.getCas());
+
+        return 1;
+    }
+
     static const luaL_Reg mc_funcs[] = {
         {"get", mc_get},
+        {"set", mc_set},
         {NULL, NULL}
     };
 }
