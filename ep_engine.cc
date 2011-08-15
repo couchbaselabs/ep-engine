@@ -291,16 +291,16 @@ extern "C" {
                + keylen, bodylen);
         valz[bodylen] = 0x00;
 
-        std::string s = e->scriptCtx.eval(valz);
-        if (s.size() > 0) {
-            *msg_size = s.size();
-            // This is freed by the remote side.
-            *msg = (char*)calloc(1, s.size());
-            assert(*msg);
-            memcpy(*msg, s.data(), s.size());
-        }
+        const char *result_str;
+        int rc = e->scriptCtx.eval(valz, &result_str, msg_size);
 
-        return PROTOCOL_BINARY_RESPONSE_SUCCESS;
+        // This is freed by the caller
+        *msg = (char*)calloc(1, *msg_size);
+        assert(*msg);
+        memcpy(*msg, result_str, *msg_size);
+
+        return rc == 0 ? PROTOCOL_BINARY_RESPONSE_SUCCESS
+            : PROTOCOL_BINARY_RESPONSE_EINTERNAL;
     }
 
     static protocol_binary_response_status setFlushParam(EventuallyPersistentEngine *e,
