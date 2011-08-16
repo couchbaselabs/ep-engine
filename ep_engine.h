@@ -575,7 +575,11 @@ public:
     }
 
     Mutex scriptLock;
-    ScriptContext scriptCtx;
+
+    // Script support
+    protocol_binary_response_status runScript(protocol_binary_request_header *request,
+                                              char **msg,
+                                              size_t *msg_size);
 
 protected:
     friend class EpEngineValueChangeListener;

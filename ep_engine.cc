@@ -263,13 +263,9 @@ extern "C" {
         return rv;
     }
 
-    static protocol_binary_response_status runScript(EventuallyPersistentEngine *e,
-                                                     protocol_binary_request_header *request,
-                                                     char **msg,
-                                                     size_t *msg_size) {
-        (void)e;
-
-        LockHolder lh(e->scriptLock);
+    protocol_binary_response_status EventuallyPersistentEngine::runScript(protocol_binary_request_header *request,
+                                                                          char **msg,
+                                                                          size_t *msg_size) {
         protocol_binary_request_no_extras *req =
             (protocol_binary_request_no_extras*)request;
 
@@ -293,7 +289,9 @@ extern "C" {
         valz[bodylen] = 0x00;
 
         const char *result_str;
-        int rc = e->scriptCtx.eval(valz, &result_str, msg_size);
+        ScriptContext scriptCtx;
+        scriptCtx.initialize(epstore, getServerApiFunc);
+        int rc = scriptCtx.eval(valz, &result_str, msg_size);
 
         // This is freed by the caller
         *msg = (char*)calloc(1, *msg_size);
@@ -912,7 +910,7 @@ extern "C" {
             }
             break;
         case CMD_RUN_SCRIPT:
-            res = runScript(h, request, &auto_msg, &msg_size);
+            res = h->runScript(request, &auto_msg, &msg_size);
             msg = auto_msg;
         }
 
@@ -1286,8 +1284,6 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::initialize(const char* config) {
     if (ret == ENGINE_SUCCESS) {
         getlExtension = new GetlExtension(epstore, getServerApiFunc);
         getlExtension->initialize();
-
-        scriptCtx.initialize(epstore, getServerApiFunc);
     }
 
     getLogger()->log(EXTENSION_LOG_DEBUG, NULL, "Engine init complete.\n");
