@@ -11,3 +11,16 @@ mc_ext.cas = function(vb, k, f)
    end
    return newvalue
 end
+
+function mc_post_init()
+   -- This is kind of a debuggish function that lets us see all of the
+   -- globals that are defined since we can't get to them with _G
+   mc_ext.dumpGlobals = function()
+                           local rv = {}
+                           for k in pairs(_G) do
+                              table.insert(rv, k)
+                           end
+                           table.sort(rv)
+                           return rv
+                        end
+end

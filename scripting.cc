@@ -231,4 +231,13 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
         throw std::string(m, rlen);
     }
 
+    // TODO Bring back the globals
+
+    // Prevent any future global access
+    lua_getfield(luaState, LUA_GLOBALSINDEX, "mc_post_init");
+    if (lua_pcall(luaState, 0, 0, 0) != 0) {
+        size_t rlen;
+        const char *m = lua_tolstring(luaState, 1, &rlen);
+        throw std::string(m, rlen);
+    }
 }
