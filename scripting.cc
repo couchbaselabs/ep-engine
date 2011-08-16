@@ -80,8 +80,8 @@ extern "C" {
             return 1;
         }
 
-        int vb = lua_tointeger(ls, 1);
-        const char *key = lua_tostring(ls, 2);
+        int vb = luaL_checkint(ls, 1);
+        const char *key = luaL_checkstring(ls, 2);
 
         lua_pushlightuserdata(ls, (void*)&storeKey);
         lua_gettable(ls, LUA_REGISTRYINDEX);
@@ -113,13 +113,13 @@ extern "C" {
             return 1;
         }
 
-        int vb = lua_tointeger(ls, 1);
-        const char *key = lua_tostring(ls, 2);
-        rel_time_t exptime = static_cast<rel_time_t>(lua_tointeger(ls, 3));
-        int flags = htonl(lua_tointeger(ls, 4));
+        int vb = luaL_checkint(ls, 1);
+        const char *key = luaL_checkstring(ls, 2);
+        rel_time_t exptime = static_cast<rel_time_t>(luaL_checkint(ls, 3));
+        int flags = htonl(luaL_checkint(ls, 4));
         size_t val_len;
-        const char *valptr = lua_tolstring(ls, 5, &val_len);
-        uint64_t cas(lua_gettop(ls) > 5 ? lua_tointeger(ls, 6) : 0);
+        const char *valptr = luaL_checklstring(ls, 5, &val_len);
+        uint64_t cas(lua_gettop(ls) > 5 ? luaL_checkinteger(ls, 6) : 0);
 
         lua_pushlightuserdata(ls, (void*)&storeKey);
         lua_gettable(ls, LUA_REGISTRYINDEX);
@@ -148,8 +148,8 @@ extern "C" {
             return 1;
         }
 
-        int vb = lua_tointeger(ls, 1);
-        const char *key = lua_tostring(ls, 2);
+        int vb = luaL_checkint(ls, 1);
+        const char *key = luaL_checkstring(ls, 2);
 
         lua_pushlightuserdata(ls, (void*)&storeKey);
         lua_gettable(ls, LUA_REGISTRYINDEX);
