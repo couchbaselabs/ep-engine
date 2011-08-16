@@ -29,33 +29,7 @@ extern "C" {
 
 extern "C" {
     typedef ENGINE_ERROR_CODE (*RESPONSE_HANDLER_T)(const void *, int , const char *);
-
-    // Register an ascii protocol handler.
-    int register_extension(lua_State *luaState);
 }
-
-class ScriptAsciiExtension : public EXTENSION_ASCII_PROTOCOL_DESCRIPTOR {
-public:
-
-    ScriptAsciiExtension(lua_State *st, const char *n);
-
-    const char* getName() { return name; }
-
-    ENGINE_ERROR_CODE doExecute(const void *c,
-                                int argc, token_t *argv,
-                                RESPONSE_HANDLER_T response_handler);
-
-    bool doAccept(void *c, int argc, token_t *argv, size_t *ndata,
-                  char **ptr);
-
-    void doAbort(const void *c);
-
-private:
-
-    lua_State *state;
-    const char *name;
-    DISALLOW_COPY_AND_ASSIGN(ScriptAsciiExtension);
-};
 
 class ScriptContext {
 public:

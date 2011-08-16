@@ -23,56 +23,6 @@ extern "C" {
     static const char serverApiKey = 'S';
     static const char storeKey =     'E';
 
-    static ScriptAsciiExtension* script_ascii_cast(const void *cmd_cookie) {
-        return static_cast<ScriptAsciiExtension*>(const_cast<void*>(cmd_cookie));
-    }
-
-    static const char *script_get_name(const void *cmd_cookie) {
-        ScriptAsciiExtension *ext = script_ascii_cast(cmd_cookie);
-        return ext->getName();
-    }
-
-    ENGINE_ERROR_CODE script_execute(const void *cmd_cookie, const void *cookie,
-                                     int argc, token_t *argv,
-                                     RESPONSE_HANDLER_T response_handler) {
-        ScriptAsciiExtension *ext = script_ascii_cast(cmd_cookie);
-        return ext->doExecute(cookie, argc, argv, response_handler);
-    }
-
-    bool script_accept(const void *cmd_cookie,
-                       void *cookie,
-                       int argc,
-                       token_t *argv,
-                       size_t *ndata,
-                       char **ptr) {
-        ScriptAsciiExtension *ext = script_ascii_cast(cmd_cookie);
-        return ext->doAccept(cookie, argc, argv, ndata, ptr);
-    }
-
-    void script_abort(const void *cmd_cookie, const void *cookie) {
-        ScriptAsciiExtension *ext = script_ascii_cast(cmd_cookie);
-        ext->doAbort(cookie);
-    }
-
-    int register_extension(lua_State *luaState) {
-        lua_pushlightuserdata(luaState, (void *)&serverApiKey);
-        lua_gettable(luaState, LUA_REGISTRYINDEX);
-        void *sapiP = lua_touserdata(luaState, -1);
-
-        SERVER_HANDLE_V1 *serverApi = static_cast<SERVER_HANDLE_V1*>(sapiP);
-
-        const char * name = lua_tostring(luaState, 1);
-
-        lua_getfield(luaState, LUA_GLOBALSINDEX, "ascii_extensions");
-        lua_settable(luaState, -1);
-
-        std::cout << "Registering " << name << std::endl;
-
-        ScriptAsciiExtension *ext = new ScriptAsciiExtension(luaState, name);
-        serverApi->extension->register_extension(EXTENSION_ASCII_PROTOCOL, ext);
-        return 0;
-    }
-
     static EventuallyPersistentStore *getStore(lua_State *ls) {
         lua_pushlightuserdata(ls, (void*)&storeKey);
         lua_gettable(ls, LUA_REGISTRYINDEX);
@@ -195,40 +145,6 @@ extern "C" {
     };
 }
 
-ScriptAsciiExtension::ScriptAsciiExtension(lua_State *st, const char *n)
-    : state(st), name(n) {
-    get_name = script_get_name;
-    accept = script_accept;
-    execute = script_execute;
-    abort = script_abort;
-    cookie = this;
-}
-
-ENGINE_ERROR_CODE ScriptAsciiExtension::doExecute(const void *c,
-                                                  int argc, token_t *argv,
-                                                  RESPONSE_HANDLER_T response_handler) {
-    (void)c;
-    (void)argc;
-    (void)argv;
-    (void)response_handler;
-    std::cout << "Handling " << argv[0].value << std::endl;
-    return ENGINE_SUCCESS;
-}
-
-bool ScriptAsciiExtension::doAccept(void *c, int argc, token_t *argv, size_t *ndata,
-                                    char **ptr) {
-    (void)c;
-    (void)argc;
-    (void)argv;
-    (void)ndata;
-    (void)ptr;
-    return strncmp(argv[0].value, name, argv[0].length) == 0;
-}
-
-void ScriptAsciiExtension::doAbort(const void *c) {
-    (void)c;
-}
-
 int ScriptContext::eval(const char *script, const char **result, size_t *rlen) {
     lua_settop(luaState, 0);
 
@@ -266,12 +182,4 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
     lua_pushlightuserdata(luaState, (void *)&storeKey);
     lua_pushlightuserdata(luaState, store);
     lua_settable(luaState, LUA_REGISTRYINDEX);
-
-    std::cerr << "Setting up script extensions" << std::endl;
-    lua_getfield(luaState, LUA_GLOBALSINDEX, "setup_extensions");
-    lua_pushcfunction(luaState, register_extension);
-    if (lua_pcall(luaState, 1, 0, 0)) {
-        std::cerr << "Error initializing registration: "
-                  << lua_tostring(luaState, -1) << std::endl;
-    }
 }
