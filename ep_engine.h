@@ -581,6 +581,8 @@ public:
                                               char **msg,
                                               size_t *msg_size);
 
+    void initScriptContext(ScriptContext &ctx);
+
 protected:
     friend class EpEngineValueChangeListener;
 
@@ -779,6 +781,10 @@ private:
     size_t getlMaxTimeout;
     EPStats stats;
     std::string scriptInit;
+    struct {
+        std::string initFun;
+        ScriptGlobalRegistry globals;
+    } scriptSupport;
     ObserveRegistry observeRegistry;
     Configuration configuration;
     Atomic<bool> warmingUp;

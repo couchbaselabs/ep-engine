@@ -22,6 +22,7 @@ extern "C" {
     // References to global data
     static const char serverApiKey = 'S';
     static const char storeKey =     'E';
+    static const char globalsKey =   'G';
 
     static EventuallyPersistentStore *getStore(lua_State *ls) {
         lua_pushlightuserdata(ls, (void*)&storeKey);
@@ -153,6 +154,44 @@ extern "C" {
         return 0;
     }
 
+    static int register_global(lua_State *ls) {
+        if (lua_gettop(ls) != 2) {
+            lua_pushstring(ls, "register_global takes two arguments:  name, function");
+            lua_error(ls);
+            return 1;
+        }
+
+        const char *name = luaL_checkstring(ls, 1);
+        if (!lua_isfunction(ls, 2)) {
+            lua_pushstring(ls, "Second argument must be a function.");
+            lua_error(ls);
+            return 1;
+        }
+
+        std::string fun;
+
+        if (lua_dump(ls, luaStringWriter, &fun)) {
+            size_t rlen;
+            const char *m = lua_tolstring(ls, 1, &rlen);
+            throw std::string(m, rlen);
+        }
+
+        lua_pushlightuserdata(ls, (void*)&globalsKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        ScriptGlobalRegistry *globals =
+            static_cast<ScriptGlobalRegistry*>(lua_touserdata(ls, -1));
+        globals->registerGlobal(name, fun);
+
+        return 0;
+    }
+
+    static const luaL_Reg core_funcs[] = {
+        {"register_global", register_global},
+        {NULL, NULL}
+    };
+
 }
 
 ScriptContext::ScriptContext() : luaState(luaL_newstate()) {
@@ -202,14 +241,15 @@ std::string ScriptContext::load(const char *path) {
     return rv;
 }
 
-
 void ScriptContext::initialize(EventuallyPersistentStore *s,
                                GET_SERVER_API get_server_api,
-                               std::string script) {
+                               std::string script,
+                               ScriptGlobalRegistry *globalRegistry) {
     store = s;
     serverApi = get_server_api();
 
     luaL_register(luaState, "mc", mc_funcs);
+    luaL_register(luaState, "ep_core", core_funcs);
 
     lua_pushlightuserdata(luaState, (void *)&serverApiKey);
     lua_pushlightuserdata(luaState, serverApi);
@@ -217,6 +257,10 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
 
     lua_pushlightuserdata(luaState, (void *)&storeKey);
     lua_pushlightuserdata(luaState, store);
+    lua_settable(luaState, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(luaState, (void *)&globalsKey);
+    lua_pushlightuserdata(luaState, globalRegistry);
     lua_settable(luaState, LUA_REGISTRYINDEX);
 
     if (luaL_loadbuffer(luaState, script.data(), script.size(), "init") != 0) {
@@ -231,7 +275,7 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
         throw std::string(m, rlen);
     }
 
-    // TODO Bring back the globals
+    globalRegistry->applyGlobals(luaState);
 
     // Prevent any future global access
     lua_getfield(luaState, LUA_GLOBALSINDEX, "mc_post_init");
@@ -239,5 +283,24 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
         size_t rlen;
         const char *m = lua_tolstring(luaState, 1, &rlen);
         throw std::string(m, rlen);
+    }
+}
+
+void ScriptGlobalRegistry::registerGlobal(std::string name, std::string fun) {
+    LockHolder lh(mutex);
+    globals[name] = fun;
+}
+
+void ScriptGlobalRegistry::applyGlobals(lua_State *ls) {
+    LockHolder lh(mutex);
+    std::map<std::string, std::string>::const_iterator iter;
+    for (iter = globals.begin(); iter != globals.end(); ++iter) {
+        if (luaL_loadbuffer(ls, iter->second.data(), iter->second.size(), "globals") != 0) {
+            size_t rlen;
+            const char *m = lua_tolstring(ls, 1, &rlen);
+            throw std::string(m, rlen);
+        }
+
+        lua_setglobal(ls, iter->first.c_str());
     }
 }

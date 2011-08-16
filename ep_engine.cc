@@ -263,6 +263,11 @@ extern "C" {
         return rv;
     }
 
+    void EventuallyPersistentEngine::initScriptContext(ScriptContext &ctx) {
+        ctx.initialize(epstore, getServerApiFunc, scriptSupport.initFun,
+                       &scriptSupport.globals);
+    }
+
     protocol_binary_response_status EventuallyPersistentEngine::runScript(protocol_binary_request_header *request,
                                                                           char **msg,
                                                                           size_t *msg_size) {
@@ -290,7 +295,7 @@ extern "C" {
 
         const char *result_str;
         ScriptContext scriptCtx;
-        scriptCtx.initialize(epstore, getServerApiFunc, scriptInit);
+        initScriptContext(scriptCtx);
         int rc = scriptCtx.eval(valz, &result_str, msg_size);
 
         // This is freed by the caller
@@ -1287,8 +1292,8 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::initialize(const char* config) {
 
         try {
             ScriptContext sctx;
-            scriptInit = sctx.load("script.lua");
-            sctx.initialize(epstore, getServerApiFunc, scriptInit);
+            scriptSupport.initFun = sctx.load("script.lua");
+            initScriptContext(sctx);
         } catch(std::string s) {
             std::cerr << "Error in init script:\n  " << s << std::endl;
             throw s;

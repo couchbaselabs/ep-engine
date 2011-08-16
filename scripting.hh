@@ -17,8 +17,10 @@
 
 #include "config.h"
 #include <string>
+#include <map>
 
 #include "ep.hh"
+#include "locks.hh"
 #include <memcached/extension.h>
 
 extern "C" {
@@ -30,6 +32,20 @@ extern "C" {
 extern "C" {
     typedef ENGINE_ERROR_CODE (*RESPONSE_HANDLER_T)(const void *, int , const char *);
 }
+
+class ScriptGlobalRegistry {
+public:
+
+    ScriptGlobalRegistry() {}
+
+    void registerGlobal(std::string name, std::string fun);
+
+    void applyGlobals(lua_State *state);
+
+private:
+    Mutex mutex;
+    std::map<std::string, std::string> globals;
+};
 
 class ScriptContext {
 public:
@@ -46,7 +62,8 @@ public:
 
     void initialize(EventuallyPersistentStore *s,
                     GET_SERVER_API get_server_api,
-                    std::string initScript);
+                    std::string initScript,
+                    ScriptGlobalRegistry *globalRegistry);
 
 private:
 
