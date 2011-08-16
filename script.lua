@@ -1,3 +1,5 @@
+json = require("dkjson")
+
 mc_ext = {}
 
 mc_ext.cas = function(vb, k, f)
