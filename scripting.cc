@@ -155,6 +155,10 @@ extern "C" {
 
 }
 
+ScriptContext::ScriptContext() : luaState(luaL_newstate()) {
+    luaL_openlibs(luaState);
+}
+
 int ScriptContext::eval(const char *script, const char **result, size_t *rlen) {
     lua_settop(luaState, 0);
 

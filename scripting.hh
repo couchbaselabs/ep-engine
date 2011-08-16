@@ -34,9 +34,7 @@ extern "C" {
 class ScriptContext {
 public:
 
-    ScriptContext() : luaState(luaL_newstate()) {
-        luaL_openlibs(luaState);
-    }
+    ScriptContext();
 
     int eval(const char *script, const char **result, size_t *rlen);
 
