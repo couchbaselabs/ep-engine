@@ -778,6 +778,7 @@ private:
     size_t getlDefaultTimeout;
     size_t getlMaxTimeout;
     EPStats stats;
+    std::string scriptInit;
     ObserveRegistry observeRegistry;
     Configuration configuration;
     Atomic<bool> warmingUp;

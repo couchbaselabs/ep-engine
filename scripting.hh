@@ -36,25 +36,19 @@ public:
 
     ScriptContext() : luaState(luaL_newstate()) {
         luaL_openlibs(luaState);
-        int status = luaL_dofile(luaState, "script.lua");
-        if (status) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "Couldn't load file: %s\n",
-                     lua_tostring(luaState, -1));
-            std::string s(buf);
-            throw s;
-        }
-
     }
 
     int eval(const char *script, const char **result, size_t *rlen);
+
+    std::string load(const char *file);
 
     ~ScriptContext() {
         lua_close(luaState);
     }
 
     void initialize(EventuallyPersistentStore *s,
-                    GET_SERVER_API get_server_api);
+                    GET_SERVER_API get_server_api,
+                    std::string initScript);
 
 private:
 

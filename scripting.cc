@@ -143,6 +143,16 @@ extern "C" {
         {"del", mc_del},
         {NULL, NULL}
     };
+
+    static int luaStringWriter(lua_State *,
+                               const void* p,
+                               size_t sz,
+                               void* ud) {
+        std::string *s = static_cast<std::string*>(ud);
+        s->append(static_cast<const char*>(p), sz);
+        return 0;
+    }
+
 }
 
 int ScriptContext::eval(const char *script, const char **result, size_t *rlen) {
@@ -168,8 +178,30 @@ int ScriptContext::eval(const char *script, const char **result, size_t *rlen) {
     return 0;
 }
 
+std::string ScriptContext::load(const char *path) {
+    lua_settop(luaState, 0);
+
+    if (luaL_loadfile(luaState, path) != 0) {
+        size_t rlen;
+        const char *m = lua_tolstring(luaState, 1, &rlen);
+        throw std::string(m, rlen);
+    }
+
+    std::string rv;
+
+    if (lua_dump(luaState, luaStringWriter, &rv)) {
+        size_t rlen;
+        const char *m = lua_tolstring(luaState, 1, &rlen);
+        throw std::string(m, rlen);
+    }
+
+    return rv;
+}
+
+
 void ScriptContext::initialize(EventuallyPersistentStore *s,
-                               GET_SERVER_API get_server_api) {
+                               GET_SERVER_API get_server_api,
+                               std::string script) {
     store = s;
     serverApi = get_server_api();
 
@@ -182,4 +214,17 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
     lua_pushlightuserdata(luaState, (void *)&storeKey);
     lua_pushlightuserdata(luaState, store);
     lua_settable(luaState, LUA_REGISTRYINDEX);
+
+    if (luaL_loadbuffer(luaState, script.data(), script.size(), "init") != 0) {
+        size_t rlen;
+        const char *m = lua_tolstring(luaState, 1, &rlen);
+        throw std::string(m, rlen);
+    }
+
+    if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != 0) {
+        size_t rlen;
+        const char *m = lua_tolstring(luaState, 1, &rlen);
+        throw std::string(m, rlen);
+    }
+
 }

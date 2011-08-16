@@ -290,7 +290,7 @@ extern "C" {
 
         const char *result_str;
         ScriptContext scriptCtx;
-        scriptCtx.initialize(epstore, getServerApiFunc);
+        scriptCtx.initialize(epstore, getServerApiFunc, scriptInit);
         int rc = scriptCtx.eval(valz, &result_str, msg_size);
 
         // This is freed by the caller
@@ -1284,6 +1284,15 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::initialize(const char* config) {
     if (ret == ENGINE_SUCCESS) {
         getlExtension = new GetlExtension(epstore, getServerApiFunc);
         getlExtension->initialize();
+
+        try {
+            ScriptContext sctx;
+            scriptInit = sctx.load("script.lua");
+            sctx.initialize(epstore, getServerApiFunc, scriptInit);
+        } catch(std::string s) {
+            std::cerr << "Error in init script:\n  " << s << std::endl;
+            throw s;
+        }
     }
 
     getLogger()->log(EXTENSION_LOG_DEBUG, NULL, "Engine init complete.\n");
