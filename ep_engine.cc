@@ -264,8 +264,7 @@ extern "C" {
     }
 
     void EventuallyPersistentEngine::initScriptContext(ScriptContext &ctx) {
-        ctx.initialize(epstore, getServerApiFunc, scriptSupport.initFun,
-                       &scriptSupport.globals);
+        ctx.initialize(epstore, scriptSupport.initFun, &scriptSupport.globals);
     }
 
     protocol_binary_response_status EventuallyPersistentEngine::runScript(protocol_binary_request_header *request,

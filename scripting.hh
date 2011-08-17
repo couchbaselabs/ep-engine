@@ -61,7 +61,6 @@ public:
     }
 
     void initialize(EventuallyPersistentStore *s,
-                    GET_SERVER_API get_server_api,
                     std::string initScript,
                     ScriptGlobalRegistry *globalRegistry);
 
@@ -69,7 +68,6 @@ private:
 
     lua_State* luaState;
     EventuallyPersistentStore *store;
-    SERVER_HANDLE_V1 *serverApi;
 
     DISALLOW_COPY_AND_ASSIGN(ScriptContext);
 };

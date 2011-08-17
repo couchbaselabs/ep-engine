@@ -20,7 +20,6 @@
 extern "C" {
 
     // References to global data
-    static const char serverApiKey = 'S';
     static const char storeKey =     'E';
     static const char globalsKey =   'G';
 
@@ -259,18 +258,12 @@ std::string ScriptContext::load(const char *path) {
 }
 
 void ScriptContext::initialize(EventuallyPersistentStore *s,
-                               GET_SERVER_API get_server_api,
                                std::string script,
                                ScriptGlobalRegistry *globalRegistry) {
     store = s;
-    serverApi = get_server_api();
 
     luaL_register(luaState, "mc", mc_funcs);
     luaL_register(luaState, "ep_core", core_funcs);
-
-    lua_pushlightuserdata(luaState, (void *)&serverApiKey);
-    lua_pushlightuserdata(luaState, serverApi);
-    lua_settable(luaState, LUA_REGISTRYINDEX);
 
     lua_pushlightuserdata(luaState, (void *)&storeKey);
     lua_pushlightuserdata(luaState, store);
