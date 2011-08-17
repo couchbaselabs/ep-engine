@@ -45,6 +45,8 @@ public:
 private:
     Mutex mutex;
     std::map<std::string, std::string> globals;
+
+    DISALLOW_COPY_AND_ASSIGN(ScriptGlobalRegistry);
 };
 
 class ScriptContext {
