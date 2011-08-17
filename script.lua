@@ -43,4 +43,13 @@ function mc_post_init()
    setmetatable(_G, global_metatable)
    setfenv(0, _G)
 
+   mc_ext.setContextGlobal = function(k, v)
+                                __global[k] = v
+                             end
+
+end
+
+function mc_init_dispatcher_job(f)
+   local fout = f and f() or nil
+   mc_ext.setContextGlobal('dispatcher_state', fout)
 end

@@ -70,6 +70,8 @@ public:
                     std::string initScript,
                     ScriptGlobalRegistry *globalRegistry);
 
+    lua_State *getState() { return luaState; }
+
 private:
     friend class ScriptCallback;
 

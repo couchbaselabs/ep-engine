@@ -57,6 +57,10 @@ extern "C" {
     static const char globalsKey =   'G';
     static const char contextKey =   'S';
 
+    // Specific to dispatcher invocations
+    static const char dispatcherKey = 'D';
+    static const char taskKey =       'T';
+
     static EventuallyPersistentStore *getStore(lua_State *ls) {
         lua_pushlightuserdata(ls, (void*)&storeKey);
         lua_gettable(ls, LUA_REGISTRYINDEX);
@@ -226,7 +230,7 @@ extern "C" {
     };
 
     static int dispatcher_schedule(lua_State *ls) {
-        if (lua_gettop(ls) != 3) {
+        if (lua_gettop(ls) < 3) {
             lua_pushstring(ls, "schedule takes three arguments: "
                            "name, function, delay");
             lua_error(ls);
@@ -245,6 +249,16 @@ extern "C" {
         }
         double delay = luaL_checknumber(ls, 3);
 
+        std::string initFun;
+        if (lua_gettop(ls) == 4) {
+            if (lua_dump(ls, luaStringWriter, &initFun)) {
+                lua_pushstring(ls, "fourth argument must be a function.");
+                lua_error(ls);
+                return 1;
+            }
+            lua_pop(ls, 1);
+        }
+
         // Now grab the actual function
         lua_pop(ls, 1);
         std::string fun;
@@ -261,15 +275,61 @@ extern "C" {
 
         ScriptContext *ctx = static_cast<ScriptContext*>(lua_touserdata(ls, -1));
 
-        shared_ptr<ScriptCallback> scb(new ScriptCallback(new ScriptContext(*ctx), name, fun));
+        ScriptContext *newCtx = new ScriptContext(*ctx);
+
+        // Stack adjusted has an extra function
+        lua_getglobal(newCtx->getState(), "mc_init_dispatcher_job");
+        if (initFun.size() > 0) {
+            if (luaL_loadbuffer(newCtx->getState(), initFun.data(), initFun.size(),
+                                "init") != 0) {
+                lua_pushstring(ls, lua_tostring(newCtx->getState(), 1));
+                lua_error(ls);
+                return 1;
+            }
+
+        } else {
+            lua_pushnil(newCtx->getState());
+        }
+
+        if (lua_pcall(newCtx->getState(), 1, 0, 0) != 0) {
+            lua_pushstring(ls, lua_tostring(newCtx->getState(), 1));
+            lua_error(ls);
+            return 1;
+        }
+
+        shared_ptr<ScriptCallback> scb(new ScriptCallback(newCtx, name, fun));
         getStore(ls)->getNonIODispatcher()->schedule(scb, NULL,
                                                      Priority::ScriptPriority,
                                                      delay);
         return 0;
     }
 
+    static int dispatcher_snooze(lua_State *ls) {
+        double delay = luaL_checknumber(ls, 1);
+
+        lua_pushlightuserdata(ls, (void*)&dispatcherKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        if (!lua_isuserdata(ls, -1)) {
+            lua_pushstring(ls, "You can only snooze when executing within a dispatcher.");
+            lua_error(ls);
+            return 1;
+        }
+
+        Dispatcher *d = static_cast<Dispatcher*>(lua_touserdata(ls, -1));
+
+        lua_pushlightuserdata(ls, (void*)&taskKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        TaskId *t = static_cast<TaskId*>(lua_touserdata(ls, -1));
+
+        d->snooze(*t, delay);
+        return 0;
+    }
+
     static const luaL_Reg dispatcher_funcs[] = {
         {"schedule", dispatcher_schedule},
+        {"snooze", dispatcher_snooze},
         {NULL, NULL}
     };
 }
@@ -415,9 +475,18 @@ void ScriptGlobalRegistry::applyGlobals(lua_State *ls) {
     }
 }
 
-bool ScriptCallback::callback(Dispatcher &, TaskId) {
+bool ScriptCallback::callback(Dispatcher &d, TaskId t) {
     lua_State *luaState(ctx->luaState);
     lua_settop(luaState, 0);
+
+    // Record our task info.
+    lua_pushlightuserdata(luaState, (void *)&dispatcherKey);
+    lua_pushlightuserdata(luaState, &d);
+    lua_settable(luaState, LUA_REGISTRYINDEX);
+
+    lua_pushlightuserdata(luaState, (void *)&taskKey);
+    lua_pushlightuserdata(luaState, &t);
+    lua_settable(luaState, LUA_REGISTRYINDEX);
 
     if (luaL_loadbuffer(luaState, fun.data(), fun.size(), name.c_str()) != 0) {
         getLogger()->log(EXTENSION_LOG_WARNING, NULL,
@@ -426,7 +495,9 @@ bool ScriptCallback::callback(Dispatcher &, TaskId) {
         return false;
     }
 
-    if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != 0) {
+    lua_getglobal(ctx->luaState, "dispatcher_state");
+
+    if (lua_pcall(luaState, 1, 1, 0) != 0) {
         getLogger()->log(EXTENSION_LOG_WARNING, NULL,
                          "Background script ``%s'' execution error:  %s\n",
                          name.c_str(), lua_tostring(luaState, 1));
