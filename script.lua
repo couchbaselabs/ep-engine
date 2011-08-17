@@ -7,8 +7,12 @@ mc_ext.cas = function(vb, k, f)
    while true do
       local flags, cas, value = mc.get(vb, k)
       newvalue = f(value)
-      if pcall(mc.set, vb, k, 0, flags, newvalue, cas) then
+      if newvalue == value then
          break
+      else
+         if pcall(mc.set, vb, k, 0, flags, newvalue, cas) then
+            break
+         end
       end
    end
    return newvalue
