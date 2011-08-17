@@ -73,6 +73,16 @@ extern "C" {
         return 0;
     }
 
+    static EventuallyPersistentStore *getStore(lua_State *ls) {
+        lua_pushlightuserdata(ls, (void*)&storeKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        EventuallyPersistentStore *store =
+            static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
+        return store;
+    }
+
     static int mc_get(lua_State *ls) {
         if (lua_gettop(ls) != 2) {
             lua_pushstring(ls, "mc.get takes two arguments: vbucket, key");
@@ -83,13 +93,7 @@ extern "C" {
         int vb = luaL_checkint(ls, 1);
         const char *key = luaL_checkstring(ls, 2);
 
-        lua_pushlightuserdata(ls, (void*)&storeKey);
-        lua_gettable(ls, LUA_REGISTRYINDEX);
-        assert(lua_isuserdata(ls, -1));
-
-        EventuallyPersistentStore *store =
-            static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
-        GetValue gv(store->get(key, vb, NULL, false));
+        GetValue gv(getStore(ls)->get(key, vb, NULL, false));
 
         if (gv.getStatus() != ENGINE_SUCCESS) {
             lua_pushstring(ls, "error retrieving stuff");
@@ -121,16 +125,9 @@ extern "C" {
         const char *valptr = luaL_checklstring(ls, 5, &val_len);
         uint64_t cas(lua_gettop(ls) > 5 ? luaL_checkinteger(ls, 6) : 0);
 
-        lua_pushlightuserdata(ls, (void*)&storeKey);
-        lua_gettable(ls, LUA_REGISTRYINDEX);
-        assert(lua_isuserdata(ls, -1));
-
-        EventuallyPersistentStore *store =
-            static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
-
         Item itm(key, strlen(key), flags, exptime, valptr, val_len, cas, -1, vb);
 
-        if (store->set(itm, NULL) != ENGINE_SUCCESS) {
+        if (getStore(ls)->set(itm, NULL) != ENGINE_SUCCESS) {
             lua_pushstring(ls, "storage error");
             lua_error(ls);
             return 1;
@@ -151,15 +148,8 @@ extern "C" {
         int vb = luaL_checkint(ls, 1);
         const char *key = luaL_checkstring(ls, 2);
 
-        lua_pushlightuserdata(ls, (void*)&storeKey);
-        lua_gettable(ls, LUA_REGISTRYINDEX);
-        assert(lua_isuserdata(ls, -1));
-
-        EventuallyPersistentStore *store =
-            static_cast<EventuallyPersistentStore*>(lua_touserdata(ls, -1));
-
-        if (store->deleteItem(key, 0, 0, vb,
-                              NULL, false, false) != ENGINE_SUCCESS) {
+        if (getStore(ls)->deleteItem(key, 0, 0, vb,
+                                     NULL, false, false) != ENGINE_SUCCESS) {
             lua_pushstring(ls, "error deleting");
             lua_error(ls);
             return 1;
