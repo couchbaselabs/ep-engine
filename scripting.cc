@@ -195,7 +195,24 @@ extern "C" {
 }
 
 ScriptContext::ScriptContext() : luaState(luaL_newstate()) {
-    luaL_openlibs(luaState);
+    static const luaL_Reg stdlibs[] = {
+        {"", luaopen_base},
+        {LUA_LOADLIBNAME, luaopen_package},
+        {LUA_TABLIBNAME, luaopen_table},
+        // {LUA_IOLIBNAME, luaopen_io},
+        // {LUA_OSLIBNAME, luaopen_os},
+        {LUA_STRLIBNAME, luaopen_string},
+        {LUA_MATHLIBNAME, luaopen_math},
+        // {LUA_DBLIBNAME, luaopen_debug},
+        {NULL, NULL}
+    };
+
+    const luaL_Reg *lib = stdlibs;
+    for (; lib->func; lib++) {
+        lua_pushcfunction(luaState, lib->func);
+        lua_pushstring(luaState, lib->name);
+        lua_call(luaState, 1, 0);
+    }
 }
 
 int ScriptContext::eval(const char *script, const char **result, size_t *rlen) {
