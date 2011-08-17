@@ -16,12 +16,46 @@
  */
 
 #include "scripting.hh"
+#include "dispatcher.hh"
+
+class ScriptContext;
+
+/**
+ * Dispatcher job to run a script.
+ */
+class ScriptCallback : public DispatcherCallback {
+public:
+    ScriptCallback(ScriptContext *c, const std::string n, const std::string f)
+        : ctx(c), name(n), fun(f) {
+        assert(ctx);
+        assert(name.size() > 0);
+        assert(fun.size() > 0);
+    }
+
+    ~ScriptCallback() {
+        delete ctx;
+    }
+
+    bool callback(Dispatcher &, TaskId);
+
+    std::string description() {
+        std::stringstream ss;
+        ss << "Running lua script named:  " << name;
+        return ss.str();
+    }
+
+private:
+    ScriptContext     *ctx;
+    const std::string  name;
+    const std::string  fun;
+};
 
 extern "C" {
 
     // References to global data
     static const char storeKey =     'E';
     static const char globalsKey =   'G';
+    static const char contextKey =   'S';
 
     static EventuallyPersistentStore *getStore(lua_State *ls) {
         lua_pushlightuserdata(ls, (void*)&storeKey);
@@ -191,9 +225,67 @@ extern "C" {
         {NULL, NULL}
     };
 
+    static int dispatcher_schedule(lua_State *ls) {
+        if (lua_gettop(ls) != 3) {
+            lua_pushstring(ls, "schedule takes three arguments: "
+                           "name, function, delay");
+            lua_error(ls);
+            return 1;
+        }
+
+        const char *name = luaL_checkstring(ls, 1);
+        if (!lua_isfunction(ls, 2)) {
+            char errmsg[256];
+            snprintf(errmsg, sizeof(errmsg) -1,
+                     "Second argument must be a function, not a %s",
+                     lua_typename(ls, lua_type(ls, 2)));
+            lua_pushstring(ls, errmsg);
+            lua_error(ls);
+            return 1;
+        }
+        double delay = luaL_checknumber(ls, 3);
+
+        // Now grab the actual function
+        lua_pop(ls, 1);
+        std::string fun;
+
+        if (lua_dump(ls, luaStringWriter, &fun)) {
+            lua_pushstring(ls, "Second argument must be a function.");
+            lua_error(ls);
+            return 1;
+        }
+
+        lua_pushlightuserdata(ls, (void*)&contextKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        ScriptContext *ctx = static_cast<ScriptContext*>(lua_touserdata(ls, -1));
+
+        shared_ptr<ScriptCallback> scb(new ScriptCallback(new ScriptContext(*ctx), name, fun));
+        getStore(ls)->getNonIODispatcher()->schedule(scb, NULL,
+                                                     Priority::ScriptPriority,
+                                                     delay);
+        return 0;
+    }
+
+    static const luaL_Reg dispatcher_funcs[] = {
+        {"schedule", dispatcher_schedule},
+        {NULL, NULL}
+    };
 }
 
 ScriptContext::ScriptContext() : luaState(luaL_newstate()) {
+    initBaseLibs();
+}
+
+ScriptContext::ScriptContext(const ScriptContext& from) : luaState(luaL_newstate()) {
+    initBaseLibs();
+    initialize(getStore(from.luaState),
+               from.initScript,
+               from.globalRegistry);
+}
+
+void ScriptContext::initBaseLibs() {
     static const luaL_Reg stdlibs[] = {
         {"", luaopen_base},
         {LUA_LOADLIBNAME, luaopen_package},
@@ -258,12 +350,19 @@ std::string ScriptContext::load(const char *path) {
 }
 
 void ScriptContext::initialize(EventuallyPersistentStore *s,
-                               std::string script,
-                               ScriptGlobalRegistry *globalRegistry) {
+                               std::string init,
+                               ScriptGlobalRegistry *reg) {
     store = s;
+    initScript = init;
+    globalRegistry = reg;
 
     luaL_register(luaState, "mc", mc_funcs);
     luaL_register(luaState, "ep_core", core_funcs);
+    luaL_register(luaState, "dispatcher", dispatcher_funcs);
+
+    lua_pushlightuserdata(luaState, (void *)&contextKey);
+    lua_pushlightuserdata(luaState, this);
+    lua_settable(luaState, LUA_REGISTRYINDEX);
 
     lua_pushlightuserdata(luaState, (void *)&storeKey);
     lua_pushlightuserdata(luaState, store);
@@ -273,7 +372,8 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
     lua_pushlightuserdata(luaState, globalRegistry);
     lua_settable(luaState, LUA_REGISTRYINDEX);
 
-    if (luaL_loadbuffer(luaState, script.data(), script.size(), "init") != 0) {
+    if (luaL_loadbuffer(luaState, initScript.data(), initScript.size(),
+                        "init") != 0) {
         size_t rlen;
         const char *m = lua_tolstring(luaState, 1, &rlen);
         throw std::string(m, rlen);
@@ -313,4 +413,29 @@ void ScriptGlobalRegistry::applyGlobals(lua_State *ls) {
 
         lua_setglobal(ls, iter->first.c_str());
     }
+}
+
+bool ScriptCallback::callback(Dispatcher &, TaskId) {
+    lua_State *luaState(ctx->luaState);
+    lua_settop(luaState, 0);
+
+    if (luaL_loadbuffer(luaState, fun.data(), fun.size(), name.c_str()) != 0) {
+        getLogger()->log(EXTENSION_LOG_WARNING, NULL,
+                         "Background script ``%s'' parsing error:  %s\n",
+                         name.c_str(), lua_tostring(luaState, 1));
+        return false;
+    }
+
+    if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != 0) {
+        getLogger()->log(EXTENSION_LOG_WARNING, NULL,
+                         "Background script ``%s'' execution error:  %s\n",
+                         name.c_str(), lua_tostring(luaState, 1));
+        return false;
+    }
+
+    if (lua_gettop(luaState) >= 1 && lua_isboolean(luaState, 1)) {
+        return static_cast<bool>(lua_toboolean(luaState, 1));
+    }
+
+    return false;
 }

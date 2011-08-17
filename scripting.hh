@@ -33,6 +33,8 @@ extern "C" {
     typedef ENGINE_ERROR_CODE (*RESPONSE_HANDLER_T)(const void *, int , const char *);
 }
 
+class ScriptCallback;
+
 class ScriptGlobalRegistry {
 public:
 
@@ -54,6 +56,8 @@ public:
 
     ScriptContext();
 
+    ScriptContext(const ScriptContext& from);
+
     int eval(const char *script, const char **result, size_t *rlen);
 
     std::string load(const char *file);
@@ -67,9 +71,14 @@ public:
                     ScriptGlobalRegistry *globalRegistry);
 
 private:
+    friend class ScriptCallback;
+
+    void initBaseLibs();
 
     lua_State* luaState;
+    std::string initScript;
     EventuallyPersistentStore *store;
+    ScriptGlobalRegistry *globalRegistry;
 
-    DISALLOW_COPY_AND_ASSIGN(ScriptContext);
+    void operator=(const ScriptContext&);
 };
