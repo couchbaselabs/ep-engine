@@ -138,6 +138,35 @@ extern "C" {
         return 1;
     }
 
+    static int mc_add(lua_State *ls) {
+        if (lua_gettop(ls) != 5) {
+            lua_pushstring(ls, "mc.set takes five arguments: "
+                           "vbucket, key, exp, flags, value");
+            lua_error(ls);
+            return 1;
+        }
+
+        int vb = luaL_checkint(ls, 1);
+        const char *key = luaL_checkstring(ls, 2);
+        rel_time_t exptime = static_cast<rel_time_t>(luaL_checkint(ls, 3));
+        int flags = htonl(luaL_checkint(ls, 4));
+        size_t val_len;
+        const char *valptr = luaL_checklstring(ls, 5, &val_len);
+
+        Item itm(key, strlen(key), flags, exptime, valptr, val_len, 0, -1, vb);
+
+        ENGINE_ERROR_CODE rc = getStore(ls)->add(itm, NULL);
+        if (rc != ENGINE_SUCCESS) {
+            lua_pushstring(ls, "storage error");
+            lua_error(ls);
+            return 1;
+        }
+
+        lua_pushinteger(ls, itm.getCas());
+
+        return 1;
+    }
+
     static int mc_del(lua_State *ls) {
         if (lua_gettop(ls) != 2) {
             lua_pushstring(ls, "mc.del takes two arguments: vbucket, key");
@@ -160,6 +189,7 @@ extern "C" {
     static const luaL_Reg mc_funcs[] = {
         {"get", mc_get},
         {"set", mc_set},
+        {"add", mc_add},
         {"del", mc_del},
         {NULL, NULL}
     };
