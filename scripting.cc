@@ -15,8 +15,11 @@
  *   limitations under the License.
  */
 
+#include "common.hh"
 #include "scripting.hh"
 #include "dispatcher.hh"
+#include "vbucket.hh"
+#include "ep.hh"
 
 class ScriptContext;
 
@@ -48,6 +51,130 @@ private:
     ScriptContext     *ctx;
     const std::string  name;
     const std::string  fun;
+};
+
+class ScriptVBucketVisitor : public VBucketVisitor {
+public:
+    ScriptVBucketVisitor(ScriptContext *c,
+                         const std::string inf,
+                         const std::string vbf,
+                         const std::string svf,
+                         const std::string tf)
+        : ctx(c), initfun(inf), vbfun(vbf), svfun(svf), teardownfun(tf) {
+        assert(ctx);
+        assert(vbfun.size() > 0);
+        assert(svfun.size() > 0);
+
+        maybeInit();
+    }
+
+    ~ScriptVBucketVisitor() {
+        // Final invocation to let the script know it can clean up now.
+        if (teardownfun.size() > 0) {
+            lua_State *ls(ctx->getState());
+
+            luaL_loadbuffer(ls, teardownfun.data(), teardownfun.size(),
+                            "teardownfun");
+
+            if (lua_pcall(ls, 0, 0, 0) != 0) {
+                getLogger()->log(EXTENSION_LOG_WARNING, NULL,
+                                 "vbucket script teardown error:  %s\n",
+                                 lua_tostring(ls, 1));
+            }
+        }
+
+        delete ctx;
+    }
+
+    void maybeInit() {
+        if (initfun.size() > 0) {
+            lua_State *ls(ctx->getState());
+
+            luaL_loadbuffer(ls, initfun.data(), initfun.size(), "initfun");
+
+            if (lua_pcall(ls, 0, 0, 0) != 0) {
+                getLogger()->log(EXTENSION_LOG_WARNING, NULL,
+                                 "vbucket script init error:  %s\n",
+                                 lua_tostring(ls, 1));
+            }
+        }
+    }
+
+    bool visitBucket(RCPtr<VBucket> &vb) {
+        lua_State *ls(ctx->getState());
+
+        luaL_loadbuffer(ls, vbfun.data(), vbfun.size(), "vbfun");
+        lua_pushinteger(ls, vb->getId());
+        lua_pushstring(ls, VBucket::toString(vb->getState()));
+
+        if (lua_pcall(ls, 2, 1, 0) != 0) {
+            getLogger()->log(EXTENSION_LOG_WARNING, NULL,
+                             "vbucket script execution error:  %s\n",
+                             lua_tostring(ls, 1));
+            return false;
+        }
+
+        vbucket = vb->getId();
+        return lua_toboolean(ls, 1) == 1;
+    }
+
+    void visit(StoredValue *v) {
+        lua_State *ls(ctx->getState());
+
+        luaL_loadbuffer(ls, svfun.data(), svfun.size(), "vbfun");
+        lua_pushinteger(ls, vbucket);
+        lua_pushlstring(ls, v->getKeyBytes(), v->getKeyLen());
+        lua_pushinteger(ls, v->getExptime());
+        lua_pushinteger(ls, ntohl(v->getFlags()));
+        lua_pushlightuserdata(ls, v);
+
+        if (lua_pcall(ls, 5, 0, 0) != 0) {
+            getLogger()->log(EXTENSION_LOG_WARNING, NULL,
+                             "data script execution error:  %s\n",
+                             lua_tostring(ls, 1));
+        }
+    }
+
+private:
+    ScriptContext     *ctx;
+    const std::string  initfun;
+    const std::string  vbfun;
+    const std::string  svfun;
+    const std::string  teardownfun;
+    uint16_t           vbucket;
+
+    DISALLOW_COPY_AND_ASSIGN(ScriptVBucketVisitor);
+};
+
+class ScriptVBucketVisitorCallback : public DispatcherCallback {
+public:
+
+    ScriptVBucketVisitorCallback(EventuallyPersistentStore *s,
+                                 ScriptVBucketVisitor *v) : store(s), vbv(v) {
+        assert(s);
+        assert(vbv);
+    }
+
+    ~ScriptVBucketVisitorCallback() {
+        delete vbv;
+    }
+
+    bool callback(Dispatcher &, TaskId) {
+        store->visit(*vbv);
+        return false;
+    }
+
+    std::string description() {
+        std::stringstream ss;
+        ss << "Running a scripted vbucket visitor";
+        return ss.str();
+    }
+
+private:
+    EventuallyPersistentStore *store;
+    ScriptVBucketVisitor *vbv;
+
+    DISALLOW_COPY_AND_ASSIGN(ScriptVBucketVisitorCallback);
 };
 
 extern "C" {
@@ -332,6 +459,70 @@ extern "C" {
         {"snooze", dispatcher_snooze},
         {NULL, NULL}
     };
+
+    static int data_iterate(lua_State *ls) {
+        if (lua_gettop(ls) != 4) {
+            lua_pushstring(ls, "iterate takes four function arguments: "
+                           "initfun(), f(vb,state) => true, "
+                           "f(k, exp, flags, v), teardownfun()");
+            lua_error(ls);
+            return 1;
+        }
+
+        std::string teardownfun;
+        if (lua_dump(ls, luaStringWriter, &teardownfun)) {
+            lua_pushstring(ls, "fourth argument must be a function.");
+            lua_error(ls);
+            return 1;
+        }
+        lua_pop(ls, 1);
+
+        std::string datafun;
+        if (lua_dump(ls, luaStringWriter, &datafun)) {
+            lua_pushstring(ls, "third argument must be a function.");
+            lua_error(ls);
+            return 1;
+        }
+        lua_pop(ls, 1);
+
+        std::string vbfun;
+        if (lua_dump(ls, luaStringWriter, &vbfun)) {
+            lua_pushstring(ls, "second argument must be a function.");
+            lua_error(ls);
+            return 1;
+        }
+        lua_pop(ls, 1);
+
+        std::string initfun;
+        if (lua_dump(ls, luaStringWriter, &initfun)) {
+            lua_pushstring(ls, "first argument must be a function.");
+            lua_error(ls);
+            return 1;
+        }
+        lua_pop(ls, 1);
+
+        EventuallyPersistentStore *store = getStore(ls);
+        lua_pushlightuserdata(ls, (void*)&contextKey);
+        lua_gettable(ls, LUA_REGISTRYINDEX);
+        assert(lua_isuserdata(ls, -1));
+
+        ScriptContext *ctx = static_cast<ScriptContext*>(lua_touserdata(ls, -1));
+        ScriptContext *newCtx = new ScriptContext(*ctx);
+        ScriptVBucketVisitor *v = new ScriptVBucketVisitor(newCtx,
+                                                           initfun,
+                                                           vbfun, datafun,
+                                                           teardownfun);
+        shared_ptr<ScriptVBucketVisitorCallback> scb(new ScriptVBucketVisitorCallback(store, v));
+        getStore(ls)->getNonIODispatcher()->schedule(scb, NULL,
+                                                     Priority::ScriptPriority,
+                                                     0);
+        return 0;
+    }
+
+    static const luaL_Reg data_funcs[] = {
+        {"iterate", data_iterate},
+        {NULL, NULL}
+    };
 }
 
 ScriptContext::ScriptContext() : luaState(luaL_newstate()) {
@@ -419,6 +610,7 @@ void ScriptContext::initialize(EventuallyPersistentStore *s,
     luaL_register(luaState, "mc", mc_funcs);
     luaL_register(luaState, "ep_core", core_funcs);
     luaL_register(luaState, "dispatcher", dispatcher_funcs);
+    luaL_register(luaState, "data", data_funcs);
 
     lua_pushlightuserdata(luaState, (void *)&contextKey);
     lua_pushlightuserdata(luaState, this);
