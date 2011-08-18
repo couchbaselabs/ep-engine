@@ -57,3 +57,15 @@ function mc_init_dispatcher_job(f)
    local fout = f and f() or nil
    mc_ext.setContextGlobal('dispatcher_state', fout)
 end
+
+-- Convenience function for things that want to do a one time
+-- initialization, generate a coroutine, and then keep calling the
+-- coroutine until it completes.
+mc_ext.dispatcher_coroutine = function(name, delay, coroutine_generator)
+                                 dispatcher.schedule(name,
+                                                     function(s)
+                                                        return coroutine.resume(s)
+                                                     end,
+                                                     delay,
+                                                     coroutine_generator)
+                              end
