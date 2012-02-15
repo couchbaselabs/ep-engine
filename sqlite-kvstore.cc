@@ -8,6 +8,10 @@
 #include "sqlite-kvstore.hh"
 #include "sqlite-pst.hh"
 
+#define STATWRITER_NAMESPACE sqlite_engine
+#include "statwriter.hh"
+#undef STATWRITER_NAMESPACE
+
 StrategicSqlite3::StrategicSqlite3(EPStats &st, shared_ptr<SqliteStrategy> s) : KVStore(),
     stats(st), strategy(s),
     intransaction(false) {

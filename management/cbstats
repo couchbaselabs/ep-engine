@@ -2,6 +2,7 @@
 
 import clitool
 import sys
+import math
 import itertools
 import re
 
@@ -25,7 +26,7 @@ def cmd(f):
                 password = ''
             mc.sasl_auth_plain(username, password)
 
-        if kwargs['allBuckets']:
+        if kwargs.get('allBuckets', None):
             buckets = mc.stats('bucket')
             for bucket in buckets.iterkeys():
                 print '*' * 78
@@ -50,6 +51,100 @@ def stats_formatter(stats, prefix=" ", cmp=None):
         for stat, val in sorted(stats.items(), cmp=cmp):
             s = stat + ":"
             print "%s%s%s" % (prefix, s.ljust(longest), val)
+
+def time_label(s):
+    # -(2**64) -> '-inf'
+    # 2**64 -> 'inf'
+    # 0 -> '0'
+    # 4 -> '4us'
+    # 838384 -> '838ms'
+    # 8283852 -> '8s'
+    if s > BIG_VALUE:
+        return 'inf'
+    elif s < SMALL_VALUE:
+        return '-inf'
+    elif s == 0:
+        return '0'
+    product = 1
+    sizes = (('us', 1), ('ms', 1000), ('s', 1000), ('m', 60))
+    sizeMap = []
+    for l,sz in sizes:
+        product = sz * product
+        sizeMap.insert(0, (l, product))
+    lbl, factor = itertools.dropwhile(lambda x: x[1] > s, sizeMap).next()
+    return "%d%s" % (s / factor, lbl)
+
+def sec_label(s):
+    print "sec_label(%d)" % s
+    return time_label(s * 1000000)
+
+def size_label(s):
+    if s == 0:
+        return "0"
+    sizes=['', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
+    e = math.floor(math.log(abs(s), 1024))
+    suffix = sizes[int(e)]
+    return "%d%s" % (s/(1024 ** math.floor(e)), suffix)
+
+@cmd
+
+def histograms(mc, raw_stats):
+    def seg(k, v):
+        # Parse ('some_stat_x_y', 'v') into (('some_stat', x, y), v)
+        ka = k.split('_')
+        k = '_'.join(ka[0:-1])
+        kstart, kend = [int(x) for x in ka[-1].split(',')]
+        return ((k, kstart, kend), int(v))
+
+    # Try to figure out the terminal width.  If we can't, 79 is good
+    def termWidth():
+        try:
+            import fcntl, termios, struct
+            h, w, hp, wp = struct.unpack('HHHH',
+                                         fcntl.ioctl(0, termios.TIOCGWINSZ,
+                                                     struct.pack('HHHH', 0, 0, 0, 0)))
+            return w
+        except:
+            return 79
+
+    # Acquire, sort, categorize, and label the timings.
+    stats = sorted([seg(*kv) for kv in raw_stats.items()])
+    dd = {}
+    totals = {}
+    longest = 0
+    labelers = {'klogPadding': size_label,
+                'item_alloc_sizes': size_label,
+                'paged_out_time': sec_label}
+    for s in stats:
+        def_lbl = time_label
+        if s[0][0].endswith("Size"):
+            def_lbl = size_label
+        elif s[0][0].endswith("Seek"):
+            def_lbl = size_label
+        labeler = labelers.get(s[0][0], def_lbl)
+        lbl = "%s - %s" % (labeler(s[0][1]), labeler(s[0][2]))
+        longest = max(longest, len(lbl) + 1)
+        k = s[0][0]
+        l = dd.get(k, [])
+        l.append((lbl, s[1]))
+        dd[k] = l
+        totals[k] = totals.get(k, 0) + s[1]
+
+    # Now do the actual output
+    for k in sorted(dd):
+        print " %s (%d total)" % (k, totals[k])
+        widestnum = max(len(str(v[1])) for v in dd[k])
+        ccount = 0
+        for lbl,v in dd[k]:
+            ccount += v
+            pcnt = (ccount * 100.0) / totals[k]
+            # This is the important part being printed
+            toprint = "    %s: (%6.02f%%) %s" % (lbl.ljust(longest), pcnt,
+                                                 str(v).rjust(widestnum))
+            # Throw in a bar graph since they're popular and eye catchy
+            remaining = termWidth() - len(toprint) - 2
+            lpcnt = float(v) / totals[k]
+            print "%s %s" % (toprint, '#' * int(lpcnt * remaining))
 
 @cmd
 def stats_vkey(mc, key, vb):
@@ -90,53 +185,7 @@ def time_label(s):
 
 @cmd
 def stats_timings(mc):
-    def seg(k, v):
-        # Parse ('some_stat_x_y', 'v') into (('some_stat', x, y), v)
-        ka = k.split('_')
-        k = '_'.join(ka[0:-1])
-        kstart, kend = [int(x) for x in ka[-1].split(',')]
-        return ((k, kstart, kend), int(v))
-
-    # Try to figure out the terminal width.  If we can't, 79 is good
-    def termWidth():
-        try:
-            import fcntl, termios, struct
-            h, w, hp, wp = struct.unpack('HHHH',
-                                         fcntl.ioctl(0, termios.TIOCGWINSZ,
-                                                     struct.pack('HHHH', 0, 0, 0, 0)))
-            return w
-        except:
-            return 79
-
-    # Acquire, sort, categorize, and label the timings.
-    stats = sorted([seg(*kv) for kv in mc.stats('timings').items()])
-    dd = {}
-    totals = {}
-    longest = 0
-    for s in stats:
-        lbl = "%s - %s" % (time_label(s[0][1]), time_label(s[0][2]))
-        longest = max(longest, len(lbl) + 1)
-        k = s[0][0]
-        l = dd.get(k, [])
-        l.append((lbl, s[1]))
-        dd[k] = l
-        totals[k] = totals.get(k, 0) + s[1]
-
-    # Now do the actual output
-    for k in sorted(dd):
-        print " %s (%d total)" % (k, totals[k])
-        widestnum = max(len(str(v[1])) for v in dd[k])
-        ccount = 0
-        for lbl,v in dd[k]:
-            ccount += v
-            pcnt = (ccount * 100.0) / totals[k]
-            # This is the important part being printed
-            toprint = "    %s: (%6.02f%%) %s" % (lbl.ljust(longest), pcnt,
-                                                 str(v).rjust(widestnum))
-            # Throw in a bar graph since they're popular and eye catchy
-            remaining = termWidth() - len(toprint) - 2
-            lpcnt = float(v) / totals[k]
-            print "%s %s" % (toprint, '#' * int(lpcnt * remaining))
+    histograms(mc, mc.stats('timings'))
 
 @cmd
 def stats_tap(mc):
@@ -147,8 +196,12 @@ def stats_tapagg(mc):
     stats_formatter(stats_perform(mc, 'tapagg _'))
 
 @cmd
-def stats_checkpoint(mc):
-    stats_formatter(stats_perform(mc, 'checkpoint'))
+def stats_checkpoint(mc, vb=-1):
+    if vb == -1:
+        cmd = 'checkpoint'
+    else:
+        cmd = "checkpoint %s" % (str(vb))
+    stats_formatter(stats_perform(mc, cmd))
 
 @cmd
 def stats_slabs(mc):
@@ -157,6 +210,39 @@ def stats_slabs(mc):
 @cmd
 def stats_items(mc):
     stats_formatter(stats_perform(mc, 'items'))
+
+@cmd
+def stats_vbucket(mc):
+    stats_formatter(stats_perform(mc, 'vbucket'))
+
+@cmd
+def stats_vbucket_details(mc):
+    stats_formatter(stats_perform(mc, 'vbucket-details'))
+
+@cmd
+def stats_prev_vbucket(mc):
+    stats_formatter(stats_perform(mc, 'prev-vbucket'))
+
+@cmd
+def stats_memory(mc):
+    stats_formatter(stats_perform(mc, 'memory'))
+
+@cmd
+def stats_restore(mc):
+    stats_formatter(stats_perform(mc, 'restore'))
+
+
+@cmd
+def stats_couchdb(mc):
+    histograms(mc, mc.stats('couchdb'))
+
+@cmd
+def stats_kvstore(mc):
+    stats_formatter(stats_perform(mc, 'kvstore'))
+
+@cmd
+def stats_kvtimings(mc):
+    histograms(mc, mc.stats('kvtimings'))
 
 def avg(s):
     return sum(s) / len(s)
@@ -262,18 +348,26 @@ def reset(mc):
 def main():
     c = clitool.CliTool()
 
-    c.addCommand('vkey', stats_vkey, 'vkey keyname vbid [username password]')
     c.addCommand('all', stats_all, 'all [username password]')
+    c.addCommand('checkpoint', stats_checkpoint, 'checkpoint [vbid] [username password]')
+    c.addCommand('couchdb', stats_couchdb, 'couchdb [username password]')
+    c.addCommand('dispatcher', stats_dispatcher, 'dispatcher [logs] [username password]')
     c.addCommand('hash', stats_hash, 'hash [detail] [username password]')
-    c.addCommand('checkpoint', stats_checkpoint, 'checkpoint [username password]')
+    c.addCommand('items', stats_items, 'items [username password]')
+    c.addCommand('kvstore', stats_kvstore, 'kvstore [username password]')
+    c.addCommand('kvtimings', stats_kvtimings, 'kvstore [username password]')
+    c.addCommand('memory', stats_memory, 'memory [username password]')
+    c.addCommand('prev-vbucket', stats_prev_vbucket, 'prev-vbucket [username password]')
+    c.addCommand('raw', stats_raw, 'raw argument [username password]')
+    c.addCommand('reset', reset, 'reset [username password]')
+    c.addCommand('restore', stats_restore, 'restore [username password]')
+    c.addCommand('slabs', stats_slabs, 'slabs [username password]')
     c.addCommand('tap', stats_tap, 'tap [username password]')
     c.addCommand('tapagg', stats_tapagg, 'tapagg [username password]')
     c.addCommand('timings', stats_timings, 'timings [username password]')
-    c.addCommand('raw', stats_raw, 'raw argument [username password]')
-    c.addCommand('reset', reset, 'reset [username password]')
-    c.addCommand('dispatcher', stats_dispatcher, 'dispatcher [logs] [username password]')
-    c.addCommand('slabs', stats_slabs, 'slabs [username password]')
-    c.addCommand('items', stats_items, 'items [username password]')
+    c.addCommand('vbucket', stats_vbucket, 'vbucket [username password]')
+    c.addCommand('vbucket-details', stats_vbucket_details, 'vbucket-details [username password]')
+    c.addCommand('vkey', stats_vkey, 'vkey keyname vbid [username password]')
     c.addFlag('-a', 'allBuckets', 'iterate over all buckets (requires admin u/p)')
 
     c.execute()
