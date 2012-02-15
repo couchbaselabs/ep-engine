@@ -77,7 +77,6 @@ ep_la_SOURCES = \
                  sizes.cc \
                  stats.hh \
                  statsnap.cc statsnap.hh \
-                 statwriter.hh \
                  stored-value.cc stored-value.hh \
                  syncobject.hh \
                  sync_registry.cc sync_registry.hh \
@@ -98,7 +97,8 @@ libkvstore_la_SOURCES = kvstore.cc kvstore.hh \
                         sqlite-eval.cc sqlite-eval.hh \
                         sqlite-kvstore.cc sqlite-kvstore.hh \
                         sqlite-pst.cc sqlite-pst.hh \
-                        sqlite-strategies.cc sqlite-strategies.hh
+                        sqlite-strategies.cc sqlite-strategies.hh \
+                        sqlite-vfs.c sqlite-vfs.h
 libkvstore_la_LIBADD =
 libkvstore_la_DEPENDENCIES =
 
