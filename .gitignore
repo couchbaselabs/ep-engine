@@ -11,8 +11,8 @@
 *.tar.gz
 *.tcov
 *~
-.deps/
 .DS_Store
+.deps/
 .generated_configuration
 .genstamp
 .libs/
@@ -48,10 +48,11 @@
 /m4/ltversion.m4
 /m4/lt~obsolete.m4
 /m4/version.m4
-/mc-kvstore-test
 /management/*bdbconvert
+/management/cbkvtool
 /management/sqlite3
 /mbbackup-????.mbb
+/mc-kvstore-test
 /sizes
 /stamp-h1
 /testlogger_libify.cc

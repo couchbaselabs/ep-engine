@@ -142,6 +142,7 @@ AC_ARG_WITH([memcached],
 
 AS_IF(test "x${ac_cv_with_memcached}" != "x",
       [CPPFLAGS="-I${ac_cv_with_memcached}/include $CPPFLAGS"
+       LDFLAGS="-L${ac_cv_with_memcached} -L${ac_cv_with_memcached}/.libs $LDFLAGS"
        PATH="${ac_cv_with_memcached}:$PATH"])
 
 AC_CHECK_HEADERS(memcached/engine.h)
@@ -157,6 +158,8 @@ AS_IF(test "x${bindir}" = 'x${exec_prefix}/bin',
 AC_PATH_PROG(ENGINE_TESTAPP, engine_testapp, no)
 AS_IF(test "x${ENGINE_TESTAPP}" = "xno",
       AC_MSG_ERROR([Can't build ep-engine without engine_testapp]))
+
+PANDORA_HAVE_MEMCACHED_UTIL
 
 AM_CONDITIONAL(BUILD_BYTEORDER, test "x$ac_cv_have_htonll" != "xyes")
 

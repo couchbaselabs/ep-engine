@@ -25,6 +25,7 @@ AC_DEFUN([PANDORA_WITH_MEMCACHED],[
       AS_IF([test "x$MEMCACHED_BINARY" = "xno"],[
         AC_MSG_ERROR(["could not find memcached binary"])
       ])
+
     ])
   ])
   AC_DEFINE_UNQUOTED([MEMCACHED_BINARY], "$MEMCACHED_BINARY", 

@@ -440,6 +440,22 @@ PYTHON_TOOLS= \
 ${PYTHON_TOOLS}: wrapper/wrapper
 	cp $< $@
 
+if HAVE_LIBLUA
+bin_PROGRAMS += management/cbkvtool
+
+management_cbkvtool_SOURCES = atomic.cc mutex.cc management/kvtool.cc \
+                              testlogger.cc \
+                              management/script_server.c management/script_server.h
+management_cbkvtool_LDADD = libkvstore.la libsqlite-kvstore.la	\
+                            libmc-kvstore.la				    \
+                            libblackhole-kvstore.la			    \
+                            libobjectregistry.la                \
+                            libconfiguration.la $(LTLIBEVENT) $(LTLIBLUA) \
+                            $(LTLIBMEMCACHED_UTILITIES)
+management_cbkvtool_DEPENDENCIES = libkvstore.la libsqlite-kvstore.la libmc-kvstore.la \
+                                   libobjectregistry.la libconfiguration.la
+endif
+
 BUILT_SOURCES += ${PYTHON_TOOLS}
 CLEANFILES+= ${PYTHON_TOOLS}
 
