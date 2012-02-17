@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <string.h>
-#include "sqlite3.h"
 
 #include "sqlite-vfs.h"
 
@@ -65,9 +64,6 @@ static int vfsepstatSleep(sqlite3_vfs*, int microseconds);
 static int vfsepstatCurrentTime(sqlite3_vfs*, double*);
 static int vfsepstatGetLastError(sqlite3_vfs*, int, char*);
 static int vfsepstatCurrentTimeInt64(sqlite3_vfs*, sqlite3_int64*);
-static int vfsepstatSetSystemCall(sqlite3_vfs*,const char*, sqlite3_syscall_ptr);
-static sqlite3_syscall_ptr vfsepstatGetSystemCall(sqlite3_vfs*, const char *);
-static const char *vfsepstatNextSystemCall(sqlite3_vfs*, const char *zName);
 
 /*
 ** Return a pointer to the tail of the pathname.  Examples:
@@ -436,32 +432,6 @@ static int vfsepstatGetLastError(sqlite3_vfs *pVfs, int iErr, char *zErr){
     return pRoot->xGetLastError(pRoot, iErr, zErr);
 }
 
-/*
-** Override system calls.
-*/
-static int vfsepstatSetSystemCall(
-                                 sqlite3_vfs *pVfs,
-                                 const char *zName,
-                                 sqlite3_syscall_ptr pFunc
-                                 ){
-    vfsepstat_info *pInfo = (vfsepstat_info*)pVfs->pAppData;
-    sqlite3_vfs *pRoot = pInfo->pRootVfs;
-    return pRoot->xSetSystemCall(pRoot, zName, pFunc);
-}
-static sqlite3_syscall_ptr vfsepstatGetSystemCall(
-                                                 sqlite3_vfs *pVfs,
-                                                 const char *zName
-                                                 ){
-    vfsepstat_info *pInfo = (vfsepstat_info*)pVfs->pAppData;
-    sqlite3_vfs *pRoot = pInfo->pRootVfs;
-    return pRoot->xGetSystemCall(pRoot, zName);
-}
-static const char *vfsepstatNextSystemCall(sqlite3_vfs *pVfs, const char *zName){
-    vfsepstat_info *pInfo = (vfsepstat_info*)pVfs->pAppData;
-    sqlite3_vfs *pRoot = pInfo->pRootVfs;
-    return pRoot->xNextSystemCall(pRoot, zName);
-}
-
 
 /*
 ** Clients invoke this routine to construct a new epstat-vfs shim.
@@ -512,14 +482,6 @@ int vfsepstat_register(
     if( pNew->iVersion>=2 ){
         pNew->xCurrentTimeInt64 = pRoot->xCurrentTimeInt64==0 ? 0 :
             vfsepstatCurrentTimeInt64;
-        if( pNew->iVersion>=3 ){
-            pNew->xSetSystemCall = pRoot->xSetSystemCall==0 ? 0 :
-                vfsepstatSetSystemCall;
-            pNew->xGetSystemCall = pRoot->xGetSystemCall==0 ? 0 :
-                vfsepstatGetSystemCall;
-            pNew->xNextSystemCall = pRoot->xNextSystemCall==0 ? 0 :
-                vfsepstatNextSystemCall;
-        }
     }
     pInfo->pRootVfs = pRoot;
     pInfo->cb = cb;
