@@ -70,23 +70,27 @@ SqliteStrategy::SqliteStrategy(const char * const fn,
     assert(filename);
     assert(shardCount > 0);
 
-    sqlite3_vfs *default_vfs(sqlite3_vfs_find(NULL));
-    assert(default_vfs);
 
-    static struct vfs_callbacks sqlite_vfs_callbacks = {
-        traceGotSectorSize,
-        traceOpen,
-        traceClose,
-        traceLock,
-        traceTrunc,
-        traceDelete,
-        traceSync,
-        traceRead,
-        traceWrite
-    };
+    if (sqlite3_vfs_find(filename) == NULL) {
 
-    vfsepstat_register(filename, default_vfs->zName,
-                       sqlite_vfs_callbacks, &sqliteStats);
+        sqlite3_vfs *default_vfs(sqlite3_vfs_find(NULL));
+        assert(default_vfs);
+
+        static struct vfs_callbacks sqlite_vfs_callbacks = {
+            traceGotSectorSize,
+            traceOpen,
+            traceClose,
+            traceLock,
+            traceTrunc,
+            traceDelete,
+            traceSync,
+            traceRead,
+            traceWrite
+        };
+
+        vfsepstat_register(filename, default_vfs->zName,
+                           sqlite_vfs_callbacks, &sqliteStats);
+    }
 }
 
 SqliteStrategy::~SqliteStrategy() {
