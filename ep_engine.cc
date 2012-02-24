@@ -263,6 +263,7 @@ extern "C" {
         return rv;
     }
 
+#ifdef HAVE_LIBLUA
     void EventuallyPersistentEngine::initScriptContext(ScriptContext &ctx) {
         ctx.initialize(epstore, scriptSupport.initFun, &scriptSupport.globals);
     }
@@ -305,6 +306,7 @@ extern "C" {
         return rc == 0 ? PROTOCOL_BINARY_RESPONSE_SUCCESS
             : PROTOCOL_BINARY_RESPONSE_EINTERNAL;
     }
+#endif /* HAVE_LIBLUA */
 
     static protocol_binary_response_status setFlushParam(EventuallyPersistentEngine *e,
                                                          const char *keyz, const char *valz,
@@ -913,9 +915,11 @@ extern "C" {
                 return rv;
             }
             break;
+#ifdef HAVE_LIBLUA
         case CMD_RUN_SCRIPT:
             res = h->runScript(request, &auto_msg, &msg_size);
             msg = auto_msg;
+#endif /* HAVE_LIBLUA */
         }
 
         // Send a special response for getl since we don't want to send the key
@@ -1289,6 +1293,7 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::initialize(const char* config) {
         getlExtension = new GetlExtension(epstore, getServerApiFunc);
         getlExtension->initialize();
 
+#ifdef HAVE_LIBLUA
         try {
             ScriptContext sctx;
             scriptSupport.initFun = sctx.load("script.lua");
@@ -1297,6 +1302,7 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::initialize(const char* config) {
             std::cerr << "Error in init script:\n  " << s << std::endl;
             throw s;
         }
+#endif /* HAVE_LIBLUA */
     }
 
     getLogger()->log(EXTENSION_LOG_DEBUG, NULL, "Engine init complete.\n");

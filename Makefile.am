@@ -88,7 +88,6 @@ ep_la_SOURCES = \
                  restore.hh \
                  restore_impl.cc \
                  ringbuffer.hh \
-                 scripting.hh scripting.cc \
                  sizes.cc \
                  stats.hh \
                  statsnap.cc statsnap.hh \
@@ -442,6 +441,8 @@ ${PYTHON_TOOLS}: wrapper/wrapper
 	cp $< $@
 
 if HAVE_LIBLUA
+ep_la_SOURCES += scripting.hh scripting.cc
+
 ep_la_LIBADD += $(LTLIBLUA)
 bin_PROGRAMS += management/cbkvtool
 

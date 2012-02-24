@@ -10,7 +10,10 @@
 #include "dispatcher.hh"
 #include "item_pager.hh"
 #include "observe_registry.hh"
+
+#ifdef HAVE_LIBLUA
 #include "scripting.hh"
+#endif
 
 #include <cstdio>
 #include <map>
@@ -574,6 +577,7 @@ public:
         return warmingUp.get() || restore.enabled.get();
     }
 
+#ifdef HAVE_LIBLUA
     Mutex scriptLock;
 
     // Script support
@@ -582,6 +586,7 @@ public:
                                               size_t *msg_size);
 
     void initScriptContext(ScriptContext &ctx);
+#endif /* HAVE_LIBLUA */
 
 protected:
     friend class EpEngineValueChangeListener;
@@ -780,11 +785,13 @@ private:
     size_t getlDefaultTimeout;
     size_t getlMaxTimeout;
     EPStats stats;
+#ifdef HAVE_LIBLUA
     std::string scriptInit;
     struct {
         std::string initFun;
         ScriptGlobalRegistry globals;
     } scriptSupport;
+#endif /* HAVE_LIBLUA */
     ObserveRegistry observeRegistry;
     Configuration configuration;
     Atomic<bool> warmingUp;
